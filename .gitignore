@@ -1,0 +1,13 @@
+.ipynb_checkpoints
+*.pdf
+.vscode
+.~lock*
+*.pyc
+*.png
+*.patch
+*training.csv
+*testing.csv
+.RData
+.Rhistory
+scratch.py
+Playground.ipynb
