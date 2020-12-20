@@ -1,0 +1,18 @@
+[Unit]
+Description=Visualizer for Maize Emergence Experiment
+After=network.target
+
+[Service]
+User=%i
+Type=simple
+WorkingDirectory=/home/%i/covid-dashboard/
+ExecStart=/home/%i/opt/ml-tools/bin/python3 covid-dashboard-nl.py deploy
+Restart=always
+RestartSec=5
+StandardOutput=/home/%i/maize_emergence_dashboard.log
+Nice=0
+CPUSchedulingPolicy=fifo
+
+[Install]
+WantedBy=default.target
+

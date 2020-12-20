@@ -8,7 +8,6 @@ import numpy as np
 
 import dash
 import dash_core_components as dcc
-import dash_daq as daq
 import dash_html_components as html
 import dash_table
 import plotly.express as px
@@ -16,6 +15,18 @@ import plotly.figure_factory as ff
 import scipy
 import waitress
 from dash.dependencies import Input, Output
+
+# Tick format based on zoom level
+TICKFORMAT_STOPS = [
+    dict(dtickrange=[None, 1000], value="%H:%M:%S.%L"),
+    dict(dtickrange=[1000, 60000], value="%H:%M:%S"),
+    dict(dtickrange=[60000, 3600000], value="%H:%M<br>%d-%b"),
+    dict(dtickrange=[3600000, 86400000], value="%H:%M<br>%d-%b"),
+    dict(dtickrange=[86400000, 604800000], value="%d-%b<br>%Y"),
+    dict(dtickrange=[604800000, "M1"], value="%d-%b<br>%Y"),
+    dict(dtickrange=["M1", "M12"], value="%b '%Y"),
+    dict(dtickrange=["M12", None], value="%Y Y")
+]
 
 
 app = dash.Dash(__name__)
@@ -49,7 +60,7 @@ app.layout = html.Div([
         ),
         html.Br(),
     ], style={
-        'width': '35%',
+        'width': '40%',
         'display': 'inline-block',
         'vertical-align': 'top',
         'textAlign': 'center',
@@ -70,14 +81,18 @@ app.layout = html.Div([
             debounce=False,
             style={
                 'align': 'center',
+                'vertical-align': 'top',
+                'textAlign': 'left',
                 'border-radius': '25px',
-                'margin': '1px',
-                'width': '70%'}
+                'margin-left': '30%',
+                'margin-right': '30%',
+                'width': '40%',
+            }
         ),
         html.Br(),
         html.Br()
     ], style={
-        'width': '8%',
+        'width': '12%',
         'display': 'inline-block',
         'vertical-align': 'top',
         'textAlign': 'center',
@@ -111,7 +126,8 @@ app.layout = html.Div([
         dcc.Dropdown(
             id='selected_provinces',
             options=[{'label': i, 'value': i} for i in unique_provinces],
-            value=sorted(['Zuid-Holland', 'Noord-Brabant', 'Utrecht', 'Limburg']),
+            value=sorted(
+                ['Zuid-Holland', 'Noord-Brabant', 'Utrecht', 'Limburg']),
             style={
                 'textAlign': 'center',
                 'align': 'center',
@@ -123,7 +139,7 @@ app.layout = html.Div([
         ),
         html.Br(),
     ], style={
-        'width': '35%',
+        'width': '40%',
         'display': 'inline-block',
         'vertical-align': 'top',
         'textAlign': 'center',
@@ -144,14 +160,18 @@ app.layout = html.Div([
             debounce=False,
             style={
                 'align': 'center',
+                'vertical-align': 'top',
+                'textAlign': 'left',
                 'border-radius': '25px',
-                'margin': '1px',
-                'width': '70%'}
+                'margin-left': '30%',
+                'margin-right': '30%',
+                'width': '40%',
+            }
         ),
         html.Br(),
         html.Br()
     ], style={
-        'width': '8%',
+        'width': '12%',
         'display': 'inline-block',
         'vertical-align': 'top',
         'textAlign': 'center',
@@ -185,16 +205,11 @@ def generate_data(selected_municipalities, moving_avg):
     data = data[data["Municipality_name"].notna()]
 
     if len(selected_municipalities) > 0:
-        mun_data = data[data["Municipality_name"].isin(selected_municipalities)]
+        mun_data = data[data["Municipality_name"].isin(
+            selected_municipalities)]
 
-    total_figure = px.line(
-        mun_data,
-        x="Date_of_report",
-        y="Total_reported",
-        color="Municipality_name"
-    )
-
-    mun_data.sort_values(by=["Municipality_name", "Date_of_report"], inplace=True)
+    mun_data.sort_values(
+        by=["Municipality_name", "Date_of_report"], inplace=True)
 
     mun_data["Daily_reported"] = mun_data.groupby("Municipality_name")["Total_reported"].transform(
         lambda x: x.diff()
@@ -204,11 +219,11 @@ def generate_data(selected_municipalities, moving_avg):
         mun_data["Daily_reported"] =\
             mun_data.groupby("Municipality_name")["Daily_reported"].transform(
                 lambda x: x.rolling(
-                            window=moving_avg,
-                            min_periods=1,
-                            center=True
-                        ).mean()
-            )
+                    window=moving_avg,
+                    min_periods=1,
+                    center=True
+                ).mean()
+        )
 
     daily_figure = px.line(
         mun_data,
@@ -216,6 +231,22 @@ def generate_data(selected_municipalities, moving_avg):
         y="Daily_reported",
         color="Municipality_name"
     )
+    daily_figure.update_yaxes(title_text="Daily reported")
+    daily_figure.update_xaxes(title_text="Date of report")
+
+    total_figure = px.line(
+        mun_data,
+        x="Date_of_report",
+        y="Total_reported",
+        color="Municipality_name"
+    )
+    total_figure.update_yaxes(title_text="Total reported")
+    total_figure.update_xaxes(title_text="Date of report")
+
+    for fig in [daily_figure, total_figure]:
+        fig.update_layout(
+            xaxis_tickformatstops=TICKFORMAT_STOPS
+        )
 
     return (daily_figure, total_figure)
 
@@ -245,13 +276,14 @@ def generate_data_province_wise(selected_provinces, moving_avg):
         data["Daily_reported"] =\
             data.groupby("Municipality_name")["Daily_reported"].transform(
                 lambda x: x.rolling(
-                            window=moving_avg,
-                            min_periods=1,
-                            center=True
-                        ).mean()
-            )
+                    window=moving_avg,
+                    min_periods=1,
+                    center=True
+                ).mean()
+        )
 
-    data_by_province = data.groupby(["Province", "Date_of_report"]).agg({"Daily_reported": sum})
+    data_by_province = data.groupby(
+        ["Province", "Date_of_report"]).agg({"Daily_reported": sum})
     data_by_province = data_by_province.reset_index()
 
     daily_province_figure = px.line(
@@ -260,20 +292,24 @@ def generate_data_province_wise(selected_provinces, moving_avg):
         y="Daily_reported",
         color="Province"
     )
+    daily_province_figure.update_yaxes(title_text="Daily reported")
+    daily_province_figure.update_xaxes(title_text="Date of report")
+
+    daily_province_figure.update_layout(
+        xaxis_tickformatstops=TICKFORMAT_STOPS
+    )
+
     return daily_province_figure
 
 
 def main():
     APP_HOST = "0.0.0.0"
     APP_PORT = 5005
-    MODE = sys.argv[1].lower()
 
-    if MODE == "dev":
+    if "--dev" in sys.argv[1:]:
         app.run_server(debug=True, host=APP_HOST, port=APP_PORT)
-    elif MODE == "deploy":
-        waitress.serve(app.server, host=APP_HOST, port=APP_PORT, threads=8)
     else:
-        return 1
+        waitress.serve(app.server, host=APP_HOST, port=APP_PORT, threads=8)
 
 
 if __name__ == "__main__":
