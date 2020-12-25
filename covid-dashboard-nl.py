@@ -3,6 +3,7 @@ import json
 import sys
 import time
 import re
+import difflib
 
 import pandas as pd
 import numpy as np
@@ -40,8 +41,28 @@ initial_read = pd.read_csv(DATA_FILENAME, sep=';')
 initial_read = initial_read[initial_read["Municipality_name"] != ""]
 initial_read = initial_read[initial_read["Municipality_name"].notna()]
 
-unique_municipalities = sorted(initial_read["Municipality_name"].unique())
-unique_provinces = sorted(initial_read["Province"].unique())
+# Read population data
+pop_data = pd.read_csv("Netherlands_population.csv")
+pop_data["Name"] = pop_data["Name"].apply(lambda x: x.replace("\xa0", ""))
+pop_data["Name"] = pop_data["Name"].apply(lambda x: re.sub(r"\(.+\)", "", x))
+pop_data["Name"] = pop_data["Name"].apply(lambda x: re.sub(r"\s+$", "", x))
+pop_data = pop_data.rename(
+    columns={"Population Estimate 2020-01-01": "Population"})
+
+# Extract municipality population data
+mun_pop_data = pop_data[pop_data["Status"] == "Municipality"]
+mun_pop_data = mun_pop_data.rename(columns={"Name": "Municipality_name"})
+
+# Extract province population data
+prov_pop_data = pop_data[pop_data["Status"] == "Province"]
+prov_pop_data = prov_pop_data.rename(columns={"Name": "Province"})
+prov_pop_data["Province"] = prov_pop_data["Province"].apply(
+            lambda x: difflib.get_close_matches(x, initial_read['Province'].unique())[0])
+
+
+unique_municipalities = set(initial_read["Municipality_name"]) & set(
+    mun_pop_data["Municipality_name"])
+unique_provinces = set(initial_read["Province"])
 
 
 app.layout = html.Div([
@@ -49,7 +70,8 @@ app.layout = html.Div([
         html.H6("Select municipalities:"),
         dcc.Dropdown(
             id='selected_municipalities',
-            options=[{'label': i, 'value': i} for i in unique_municipalities],
+            options=[{'label': i, 'value': i}
+                     for i in sorted(unique_municipalities)],
             value=sorted(["'s-Gravenhage", 'Utrecht', 'Eindhoven', 'Heerlen']),
             style={
                 'textAlign': 'center',
@@ -108,7 +130,8 @@ app.layout = html.Div([
         html.H6("Data type:"),
         dcc.RadioItems(
             id='data_type',
-            options=[{'label': i, 'value': i} for i in ["Absolute", "Per 10k people"]],
+            options=[{'label': i, 'value': i}
+                     for i in ["Absolute", "Per 10k people"]],
             value="Absolute",
             style={
                 'textAlign': 'left',
@@ -208,10 +231,45 @@ app.layout = html.Div([
         'border-radius': '25px',
         'margin': '5px'
     }),
+    html.Div([
+        html.H6("Data type:"),
+        dcc.RadioItems(
+            id='data_type_prov',
+            options=[{'label': i, 'value': i}
+                     for i in ["Absolute", "Per 10k people"]],
+            value="Absolute",
+            style={
+                'textAlign': 'left',
+                'align': 'center',
+                'border-radius': '25px',
+                'margin-left': '5%',
+                'width': '90%'
+            },
+        ),
+        html.Br(),
+    ], style={
+        'width': '12%',
+        'display': 'inline-block',
+        'vertical-align': 'top',
+        'textAlign': 'center',
+        'border': '2px black solid',
+        'border-radius': '25px',
+        'margin': '5px',
+        'height': '100%',
+    }),
     html.Br(),
     html.Div([
         dcc.Graph(
             id='daily_province_figure',
+        )
+    ], style={
+        'width': '49%',
+        'display': 'inline-block',
+        'padding': '0 20'
+    }),
+    html.Div([
+        dcc.Graph(
+            id='total_province_figure',
         )
     ], style={
         'width': '49%',
@@ -234,19 +292,9 @@ def generate_data(selected_municipalities, moving_avg, data_type):
     data = data[data["Municipality_name"] != ""]
     data = data[data["Municipality_name"].notna()]
 
-    pop_data = pd.read_csv("Netherlands_population.csv")
-    pop_data = pop_data[pop_data["Status"] == "Municipality"]
-    pop_data["Name"] = pop_data["Name"].apply(lambda x: x.replace("\xa0", ""))
-    pop_data["Name"] = pop_data["Name"].apply(lambda x: re.sub(r"\(.+\)", "", x))
-    pop_data["Name"] = pop_data["Name"].apply(lambda x: re.sub(r"\s+$", "", x))
-
-    pop_data = pop_data.rename(columns={"Name": "Municipality_name", "Population Estimate 2020-01-01": "Population"})
-
     if len(selected_municipalities) > 0:
         mun_data = data[data["Municipality_name"].isin(
             selected_municipalities)]
-
-    mun_data = mun_data.merge(pop_data)
 
     mun_data.sort_values(
         by=["Municipality_name", "Date_of_report"], inplace=True)
@@ -266,10 +314,11 @@ def generate_data(selected_municipalities, moving_avg, data_type):
         )
 
     if data_type == "Per 10k people":
-        mun_data["Daily_reported"] = mun_data["Daily_reported"] / mun_data["Population"] * 1E4
-        mun_data["Total_reported"] = mun_data["Total_reported"] / mun_data["Population"] * 1E4
-
-
+        mun_data = mun_data.merge(mun_pop_data)
+        mun_data["Daily_reported"] = mun_data["Daily_reported"] / \
+            mun_data["Population"] * 1E4
+        mun_data["Total_reported"] = mun_data["Total_reported"] / \
+            mun_data["Population"] * 1E4
 
     daily_figure = px.line(
         mun_data,
@@ -299,15 +348,15 @@ def generate_data(selected_municipalities, moving_avg, data_type):
 
 @app.callback(
     Output('daily_province_figure', 'figure'),
+    Output('total_province_figure', 'figure'),
     Input('selected_provinces', 'value'),
     Input('moving_avg_province', 'value'),
+    Input('data_type_prov', 'value'),
 )
-def generate_data_province_wise(selected_provinces, moving_avg):
+def generate_data_province_wise(selected_provinces, moving_avg, data_type_prov):
     data = pd.read_csv(DATA_FILENAME, sep=';')
     data = data[data["Municipality_name"] != ""]
     data = data[data["Municipality_name"].notna()]
-
-    print("Selected provinces:", selected_provinces)
 
     if len(selected_provinces) > 0:
         data = data[data["Province"].isin(selected_provinces)]
@@ -329,8 +378,15 @@ def generate_data_province_wise(selected_provinces, moving_avg):
         )
 
     data_by_province = data.groupby(
-        ["Province", "Date_of_report"]).agg({"Daily_reported": sum})
+        ["Province", "Date_of_report"]).agg({"Daily_reported": sum, "Total_reported": sum})
     data_by_province = data_by_province.reset_index()
+
+    if data_type_prov == "Per 10k people":
+        data_by_province = data_by_province.merge(prov_pop_data)
+        data_by_province["Daily_reported"] = data_by_province["Daily_reported"] / \
+            data_by_province["Population"] * 1E4
+        data_by_province["Total_reported"] = data_by_province["Total_reported"] / \
+            data_by_province["Population"] * 1E4
 
     daily_province_figure = px.line(
         data_by_province,
@@ -345,7 +401,20 @@ def generate_data_province_wise(selected_provinces, moving_avg):
         xaxis_tickformatstops=TICKFORMAT_STOPS
     )
 
-    return daily_province_figure
+    total_province_figure = px.line(
+        data_by_province,
+        x="Date_of_report",
+        y="Total_reported",
+        color="Province"
+    )
+    total_province_figure.update_yaxes(title_text="Total reported")
+    total_province_figure.update_xaxes(title_text="Date of report")
+
+    total_province_figure.update_layout(
+        xaxis_tickformatstops=TICKFORMAT_STOPS
+    )
+
+    return daily_province_figure, total_province_figure
 
 
 def main():
