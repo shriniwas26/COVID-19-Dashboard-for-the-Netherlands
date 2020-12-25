@@ -2,6 +2,7 @@ import datetime
 import json
 import sys
 import time
+import re
 
 import pandas as pd
 import numpy as np
@@ -29,7 +30,8 @@ TICKFORMAT_STOPS = [
 ]
 
 
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, url_base_pathname='/covid-nl/',
+                assets_folder='assets')
 app.title = "COVID-19 Dashboard - The Netherlands"
 
 DATA_FILENAME = "COVID-19_aantallen_gemeente_cumulatief.csv"
@@ -66,10 +68,11 @@ app.layout = html.Div([
         'textAlign': 'center',
         'border': '2px black solid',
         'border-radius': '25px',
-        'margin': '5px'
+        'margin': '5px',
+        'height': '100%',
     }),
     html.Div([
-        html.H6("Moving Average"),
+        html.H6("Moving average (days)"),
         dcc.Input(
             id="moving_avg",
             type="number",
@@ -92,13 +95,39 @@ app.layout = html.Div([
         html.Br(),
         html.Br()
     ], style={
+        'width': '15%',
+        'display': 'inline-block',
+        'vertical-align': 'top',
+        'textAlign': 'center',
+        'border': '2px black solid',
+        'border-radius': '25px',
+        'margin': '5px',
+        'height': '100%',
+    }),
+    html.Div([
+        html.H6("Data type:"),
+        dcc.RadioItems(
+            id='data_type',
+            options=[{'label': i, 'value': i} for i in ["Absolute", "Per 10k people"]],
+            value="Absolute",
+            style={
+                'textAlign': 'left',
+                'align': 'center',
+                'border-radius': '25px',
+                'margin-left': '5%',
+                'width': '90%'
+            },
+        ),
+        html.Br(),
+    ], style={
         'width': '12%',
         'display': 'inline-block',
         'vertical-align': 'top',
         'textAlign': 'center',
         'border': '2px black solid',
         'border-radius': '25px',
-        'margin': '5px'
+        'margin': '5px',
+        'height': '100%',
     }),
     html.Br(),
     html.Div([
@@ -148,7 +177,7 @@ app.layout = html.Div([
         'margin': '5px'
     }),
     html.Div([
-        html.H6("Moving Average"),
+        html.H6("Moving average (days)"),
         dcc.Input(
             id="moving_avg_province",
             type="number",
@@ -171,7 +200,7 @@ app.layout = html.Div([
         html.Br(),
         html.Br()
     ], style={
-        'width': '12%',
+        'width': '15%',
         'display': 'inline-block',
         'vertical-align': 'top',
         'textAlign': 'center',
@@ -198,15 +227,26 @@ app.layout = html.Div([
     Output('total_figure', 'figure'),
     Input('selected_municipalities', 'value'),
     Input('moving_avg', 'value'),
+    Input('data_type', 'value'),
 )
-def generate_data(selected_municipalities, moving_avg):
+def generate_data(selected_municipalities, moving_avg, data_type):
     data = pd.read_csv(DATA_FILENAME, sep=';')
     data = data[data["Municipality_name"] != ""]
     data = data[data["Municipality_name"].notna()]
 
+    pop_data = pd.read_csv("Netherlands_population.csv")
+    pop_data = pop_data[pop_data["Status"] == "Municipality"]
+    pop_data["Name"] = pop_data["Name"].apply(lambda x: x.replace("\xa0", ""))
+    pop_data["Name"] = pop_data["Name"].apply(lambda x: re.sub(r"\(.+\)", "", x))
+    pop_data["Name"] = pop_data["Name"].apply(lambda x: re.sub(r"\s+$", "", x))
+
+    pop_data = pop_data.rename(columns={"Name": "Municipality_name", "Population Estimate 2020-01-01": "Population"})
+
     if len(selected_municipalities) > 0:
         mun_data = data[data["Municipality_name"].isin(
             selected_municipalities)]
+
+    mun_data = mun_data.merge(pop_data)
 
     mun_data.sort_values(
         by=["Municipality_name", "Date_of_report"], inplace=True)
@@ -224,6 +264,12 @@ def generate_data(selected_municipalities, moving_avg):
                     center=True
                 ).mean()
         )
+
+    if data_type == "Per 10k people":
+        mun_data["Daily_reported"] = mun_data["Daily_reported"] / mun_data["Population"] * 1E4
+        mun_data["Total_reported"] = mun_data["Total_reported"] / mun_data["Population"] * 1E4
+
+
 
     daily_figure = px.line(
         mun_data,
@@ -303,9 +349,6 @@ def generate_data_province_wise(selected_provinces, moving_avg):
 
 
 def main():
-    APP_HOST = "0.0.0.0"
-    APP_PORT = 5005
-
     if "--dev" in sys.argv[1:]:
         app.run_server(debug=True, host=APP_HOST, port=APP_PORT)
     else:
@@ -313,4 +356,6 @@ def main():
 
 
 if __name__ == "__main__":
+    APP_HOST = "127.0.0.1"
+    APP_PORT = 5005
     sys.exit(main())
