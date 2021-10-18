@@ -1,5 +1,5 @@
-import difflib
-import re
+from datetime import datetime
+import datetime
 import sys
 
 import dash
@@ -13,74 +13,60 @@ import plotly.figure_factory as ff
 import waitress
 from dash.dependencies import Input, Output
 
-# Tick format based on zoom level
-TICKFORMAT_STOPS = [
-    dict(dtickrange=[None, 1000], value="%H:%M:%S.%L"),
-    dict(dtickrange=[1000, 60000], value="%H:%M:%S"),
-    dict(dtickrange=[60000, 3600000], value="%H:%M<br>%d-%b"),
-    dict(dtickrange=[3600000, 86400000], value="%H:%M<br>%d-%b"),
-    dict(dtickrange=[86400000, 604800000], value="%d-%b<br>%Y"),
-    dict(dtickrange=[604800000, "M1"], value="%d-%b<br>%Y"),
-    dict(dtickrange=["M1", "M12"], value="%b '%Y"),
-    dict(dtickrange=["M12", None], value="%Y Y")
+initial_read = pd.read_csv(
+    "data/COVID-19_aantallen_gemeente_cumulatief.csv",
+    sep=';'
+)
+initial_read = initial_read[
+    (initial_read["Municipality_name"] != "") &
+    (initial_read["Municipality_name"].notna())
 ]
 
-
-app = dash.Dash(__name__, url_base_pathname='/covid-nl/',
-                assets_folder='assets')
-app.title = "COVID-19 Dashboard - The Netherlands"
-
-DATA_FILENAME = "COVID-19_aantallen_gemeente_cumulatief.csv"
-
-initial_read = pd.read_csv(f"data/{DATA_FILENAME}", sep=';')
-initial_read = initial_read[initial_read["Municipality_name"] != ""]
-initial_read = initial_read[initial_read["Municipality_name"].notna()]
-
-# Read population data
-pop_data = pd.read_csv("data/Netherlands_population.csv")
-pop_data["Name"] = pop_data["Name"].apply(lambda x: x.replace("\xa0", ""))
-pop_data["Name"] = pop_data["Name"].apply(lambda x: re.sub(r"\(.+\)", "", x))
-pop_data["Name"] = pop_data["Name"].apply(lambda x: re.sub(r"\s+$", "", x))
-pop_data = pop_data.rename(
-    columns={"Population Estimate 2020-01-01": "Population"})
-
-# Extract municipality population data
-mun_pop_data = pop_data[pop_data["Status"] == "Municipality"]
-mun_pop_data = mun_pop_data.rename(columns={"Name": "Municipality_name"})
-
-# Extract province population data
-prov_pop_data = pop_data[pop_data["Status"] == "Province"]
-prov_pop_data = prov_pop_data.rename(columns={"Name": "Province"})
-prov_pop_data["Province"] = prov_pop_data["Province"].apply(
-    lambda x: difflib.get_close_matches(x, initial_read['Province'].unique())[0])
-
-
-unique_municipalities = set(initial_read["Municipality_name"]) & set(
-    mun_pop_data["Municipality_name"])
-unique_provinces = set(initial_read["Province"])
-
-
 COVID_DATA = initial_read.copy()
+initial_read = None
 METRICS = [
     'Total_reported', 'Hospital_admission', 'Deceased'
 ]
-COVID_DATA.sort_values(by=["Municipality_code", "Date_of_report"])
+COVID_DATA.sort_values(
+    by=["Municipality_code", "Municipality_name", "Date_of_report"],
+    inplace=True
+)
+
+##  Read population data ##
+mun_population_data = pd.read_csv("data/NL_Population_Latest.csv")
+mun_population_data = mun_population_data.rename(columns={
+    "PopulationOn31December_20": "Population"
+})
+COVID_DATA = COVID_DATA.merge(
+    mun_population_data, left_on="Municipality_code", right_on="Regions")
 
 ## Compute daily values ##
 for feat in METRICS:
     COVID_DATA[f"Daily_{feat}"] = COVID_DATA.groupby("Municipality_name")[feat].transform(
         lambda x: x.diff().fillna(0)
     )
-    COVID_DATA[f"Daily_{feat}"] = np.clip(
-        COVID_DATA[f"Daily_{feat}"], a_min=0, a_max=None)
+    # COVID_DATA[f"Daily_{feat}"] = np.clip(
+    #     COVID_DATA[f"Daily_{feat}"], a_min=0, a_max=None
+    # )
 
 
-# Aggregate data per province
-PROVINCE_COLS = [f"Daily_{m}" for m in METRICS] + METRICS
+## Aggregate data per province ##
+PROVINCE_COLS = [f"Daily_{m}" for m in METRICS] + METRICS + ["Population"]
 PROVINCIAL_COVID_DATA = COVID_DATA.groupby(["Province", "Date_of_report"]).agg(
-    {metric: np.sum for metric in PROVINCE_COLS})
+    {col: np.sum for col in PROVINCE_COLS})
 PROVINCIAL_COVID_DATA = PROVINCIAL_COVID_DATA.reset_index()
 
+
+unique_municipalities = sorted(set(COVID_DATA["Municipality_name"]))
+unique_provinces = sorted(set(COVID_DATA["Province"]))
+
+## Setup the dash app ##
+app = dash.Dash(
+    __name__,
+    url_base_pathname='/covid-nl/',
+    assets_folder='assets'
+)
+app.title = "COVID-19 Dashboard - The Netherlands"
 
 app.layout = html.Div([
     html.Div([
@@ -174,8 +160,8 @@ app.layout = html.Div([
         dcc.RadioItems(
             id='data_type',
             options=[{'label': i, 'value': i}
-                     for i in ["Absolute", "Per 10k people"]],
-            value="Per 10k people",
+                     for i in ["Absolute", "Per 100 people"]],
+            value="Per 100 people",
             style={
                 'textAlign': 'left',
                 'align': 'center',
@@ -298,13 +284,12 @@ def generate_data(selected_municipalities, covid_metric, moving_avg, data_type):
                 ).mean()
         )
 
-    if data_type == "Per 10k people":
-        mun_data = mun_data.merge(mun_pop_data)
+    if data_type == "Per 100 people":
         mun_data[f"Daily_{covid_metric}"] = (
-            mun_data[f"Daily_{covid_metric}"] / mun_data["Population"] * 1E4
+            mun_data[f"Daily_{covid_metric}"] / mun_data["Population"] * 100
         )
         mun_data[covid_metric] = (
-            mun_data[covid_metric] / mun_data["Population"] * 1E4
+            mun_data[covid_metric] / mun_data["Population"] * 100
         )
 
     ## Add figure for daily numbers ##
@@ -344,7 +329,6 @@ def generate_data(selected_municipalities, covid_metric, moving_avg, data_type):
     total_figure.update_layout(
         title=f"{covid_metric} ({data_type})".replace("_", " "),
         title_x=0.5,
-        xaxis_tickformatstops=TICKFORMAT_STOPS
     )
 
     return (daily_figure, total_figure)
@@ -365,15 +349,15 @@ def generate_data_province_wise(selected_provinces, covid_metric, moving_avg, da
     else:
         province_data_selected = PROVINCIAL_COVID_DATA.copy()
 
-    if data_type == "Per 10k people":
-        province_data_selected = province_data_selected.merge(
-            prov_pop_data, on="Province")
+    if data_type == "Per 100 people":
         province_data_selected[f"Daily_{covid_metric}"] = (
             province_data_selected[f"Daily_{covid_metric}"] /
-            province_data_selected["Population"] * 1E4
+            province_data_selected["Population"] * 100
         )
-        province_data_selected[covid_metric] = (province_data_selected[covid_metric] /
-                                                province_data_selected["Population"] * 1E4)
+        province_data_selected[covid_metric] = (
+            province_data_selected[covid_metric] /
+            province_data_selected["Population"] * 100
+        )
 
     if moving_avg not in [None, 0, 1]:
         province_data_selected[f"Daily_{covid_metric}"] =\
@@ -403,7 +387,6 @@ def generate_data_province_wise(selected_provinces, covid_metric, moving_avg, da
     daily_province_figure.update_layout(
         title=f"Daily {covid_metric} ({data_type})".replace("_", " "),
         title_x=0.5,
-        xaxis_tickformatstops=TICKFORMAT_STOPS
     )
 
     total_province_figure = go.Figure()
@@ -423,7 +406,6 @@ def generate_data_province_wise(selected_provinces, covid_metric, moving_avg, da
     total_province_figure.update_layout(
         title=f"{covid_metric} ({data_type})".replace("_", " "),
         title_x=0.5,
-        xaxis_tickformatstops=TICKFORMAT_STOPS,
     )
 
     return (daily_province_figure, total_province_figure)
@@ -437,7 +419,8 @@ def main():
 
 
 if __name__ == "__main__":
-    print("Starting dashboard for COVID-19 data in The Netherlands")
+    NOW = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"Starting dashboard for COVID-19 data in The Netherlands at {NOW}")
     APP_HOST = "127.0.0.1"
     APP_PORT = 5005
     sys.exit(main())
