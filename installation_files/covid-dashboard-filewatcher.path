@@ -1,0 +1,6 @@
+[Path]
+PathModified=/home/ubuntu/covid-dashboard/data/COVID-19_aantallen_gemeente_cumulatief.csv
+
+[Install]
+WantedBy=multi-user.target
+

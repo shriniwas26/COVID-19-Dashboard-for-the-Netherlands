@@ -1,0 +1,13 @@
+[Unit]
+Description=COVID Dashboard File Watcher
+After=network.target
+StartLimitIntervalSec=10
+StartLimitBurst=5
+
+[Service]
+Type=oneshot
+ExecStart=sleep 5 && /usr/bin/systemctl restart covid-dashboard@ubuntu.service
+
+[Install]
+WantedBy=multi-user.target
+
