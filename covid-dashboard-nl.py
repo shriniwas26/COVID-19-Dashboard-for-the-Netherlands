@@ -32,12 +32,12 @@ app.title = "COVID-19 Dashboard - The Netherlands"
 
 DATA_FILENAME = "COVID-19_aantallen_gemeente_cumulatief.csv"
 
-initial_read = pd.read_csv(DATA_FILENAME, sep=';')
+initial_read = pd.read_csv(f"data/{DATA_FILENAME}", sep=';')
 initial_read = initial_read[initial_read["Municipality_name"] != ""]
 initial_read = initial_read[initial_read["Municipality_name"].notna()]
 
 # Read population data
-pop_data = pd.read_csv("Netherlands_population.csv")
+pop_data = pd.read_csv("data/Netherlands_population.csv")
 pop_data["Name"] = pop_data["Name"].apply(lambda x: x.replace("\xa0", ""))
 pop_data["Name"] = pop_data["Name"].apply(lambda x: re.sub(r"\(.+\)", "", x))
 pop_data["Name"] = pop_data["Name"].apply(lambda x: re.sub(r"\s+$", "", x))
@@ -437,6 +437,7 @@ def main():
 
 
 if __name__ == "__main__":
+    print("Starting dashboard for COVID-19 data in The Netherlands")
     APP_HOST = "127.0.0.1"
     APP_PORT = 5005
     sys.exit(main())
