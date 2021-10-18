@@ -8,6 +8,7 @@ import dash_html_components as html
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import plotly.figure_factory as ff
 import waitress
 from dash.dependencies import Input, Output
@@ -306,34 +307,50 @@ def generate_data(selected_municipalities, covid_metric, moving_avg, data_type):
             mun_data[covid_metric] / mun_data["Population"] * 1E4
         )
 
-    daily_figure = px.line(
-        mun_data,
-        x="Date_of_report",
-        y=f"Daily_{covid_metric}",
-        color="Municipality_name",
+    ## Add figure for daily numbers ##
+    daily_figure = go.Figure()
+    for grp, df in mun_data.groupby("Municipality_name"):
+        daily_figure.add_trace(
+            go.Scatter(
+                x=df["Date_of_report"],
+                y=df[f"Daily_{covid_metric}"],
+                name=grp,
+                mode="markers+lines",
+                line_shape="spline",
+                marker={"size": 2}
+            )
+        )
+    daily_figure.update_layout(
+        title=f"Daily {covid_metric} ({data_type})".replace("_", " "),
+        title_x=0.5,
     )
-    daily_figure.update_yaxes(
-        title_text=f"Daily {covid_metric} ({data_type})".replace("_", " "))
-    daily_figure.update_xaxes(title_text="Date of report")
+    daily_figure.update_xaxes(title="Date of report")
 
-
-    total_figure = px.line(
-        mun_data,
-        x="Date_of_report",
-        y=covid_metric,
-        color="Municipality_name",
-    )
-    total_figure.update_yaxes(
-        title_text=f"{covid_metric} ({data_type})".replace("_", " "))
+    ## Add figure for total numbers ##
+    total_figure = go.Figure()
+    for grp, df in mun_data.groupby("Municipality_name"):
+        total_figure.add_trace(
+            go.Scatter(
+                x=df["Date_of_report"],
+                y=df[covid_metric],
+                name=grp,
+                mode="markers+lines",
+                line_shape="spline",
+                marker={"size": 2}
+            )
+        )
+    total_figure.update_yaxes(title_text="")
     total_figure.update_xaxes(title_text="Date of report")
     total_figure.update_layout(
+        title=f"{covid_metric} ({data_type})".replace("_", " "),
+        title_x=0.5,
         xaxis_tickformatstops=TICKFORMAT_STOPS
     )
 
     return (daily_figure, total_figure)
 
 
-@app.callback(
+@ app.callback(
     Output('daily_province_figure', 'figure'),
     Output('total_province_figure', 'figure'),
     Input('selected_provinces', 'value'),
@@ -355,44 +372,58 @@ def generate_data_province_wise(selected_provinces, covid_metric, moving_avg, da
             province_data_selected[f"Daily_{covid_metric}"] /
             province_data_selected["Population"] * 1E4
         )
-        province_data_selected[covid_metric] = province_data_selected[covid_metric] / \
-            province_data_selected["Population"] * 1E4
+        province_data_selected[covid_metric] = (province_data_selected[covid_metric] /
+                                                province_data_selected["Population"] * 1E4)
 
     if moving_avg not in [None, 0, 1]:
         province_data_selected[f"Daily_{covid_metric}"] =\
             province_data_selected.groupby("Province")[f"Daily_{covid_metric}"].transform(
-                lambda x: x.rolling(
-                    window=int(moving_avg),
-                    min_periods=1,
-                    center=False
-                )
-                .mean()
+            lambda x: x.rolling(
+                window=int(moving_avg),
+                min_periods=1,
+                center=False
+            )
+            .mean()
         )
 
-    daily_province_figure = px.line(
-        province_data_selected,
-        x="Date_of_report",
-        y=f"Daily_{covid_metric}",
-        color="Province"
-    )
-    daily_province_figure.update_yaxes(
-        title_text=f"Daily {covid_metric} ({data_type})".replace("_", " "))
+    daily_province_figure = go.Figure()
+    for grp, df in province_data_selected.groupby("Province"):
+        daily_province_figure.add_trace(
+            go.Scatter(
+                x=df["Date_of_report"],
+                y=df[f"Daily_{covid_metric}"],
+                name=grp,
+                mode="markers+lines",
+                line_shape="spline",
+                marker={"size": 2}
+            )
+        )
     daily_province_figure.update_xaxes(title_text="Date of report")
+    daily_province_figure.update_yaxes(title_text="")
     daily_province_figure.update_layout(
+        title=f"Daily {covid_metric} ({data_type})".replace("_", " "),
+        title_x=0.5,
         xaxis_tickformatstops=TICKFORMAT_STOPS
     )
 
-    total_province_figure = px.line(
-        province_data_selected,
-        x="Date_of_report",
-        y=covid_metric,
-        color="Province"
-    )
-    total_province_figure.update_yaxes(
-        title_text=f"{covid_metric} ({data_type})".replace("_", " "))
+    total_province_figure = go.Figure()
+    for grp, df in province_data_selected.groupby("Province"):
+        total_province_figure.add_trace(
+            go.Scatter(
+                x=df["Date_of_report"],
+                y=df[covid_metric],
+                name=grp,
+                mode="markers+lines",
+                line_shape="spline",
+                marker={"size": 2},
+            )
+        )
     total_province_figure.update_xaxes(title_text="Date of report")
+    total_province_figure.update_yaxes(title_text="")
     total_province_figure.update_layout(
-        xaxis_tickformatstops=TICKFORMAT_STOPS
+        title=f"{covid_metric} ({data_type})".replace("_", " "),
+        title_x=0.5,
+        xaxis_tickformatstops=TICKFORMAT_STOPS,
     )
 
     return (daily_province_figure, total_province_figure)
