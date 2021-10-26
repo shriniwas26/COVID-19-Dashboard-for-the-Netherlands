@@ -63,7 +63,7 @@ unique_provinces = sorted(set(COVID_DATA["Province"]))
 ## Setup the dash app ##
 app = dash.Dash(
     __name__,
-    # url_base_pathname='/covid-nl/',
+    url_base_pathname='/covid-nl/',
     assets_folder='assets'
 )
 app.title = "COVID-19 Dashboard - The Netherlands"
