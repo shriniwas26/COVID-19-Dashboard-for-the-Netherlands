@@ -1,64 +1,90 @@
-from datetime import datetime
 import datetime
+import math
+import os
 import sys
 
 import dash
-import dash_core_components as dcc
-import dash_html_components as html
+import dash.dcc as dcc
 import numpy as np
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
-import plotly.figure_factory as ff
 import waitress
+from dash import html
 from dash.dependencies import Input, Output
 
-initial_read = pd.read_csv(
+PER_POPULATION = 100
+
+
+def round_significant_digits(x, n=2):
+    if type(x) in [int, float]:
+        if x == 0:
+            return 0
+        if x > 1:
+            return round(x, n)
+
+    power = 10 ** np.ceil(np.log10(abs(x)))
+    return round(x / power, n) * power
+
+
+## Metrics to display ##
+METRICS = ['Total_reported', 'Hospital_admission', 'Deceased']
+
+## Initial reading and sanitization steps ##
+COVID_DATA = pd.read_csv(
     "data/COVID-19_aantallen_gemeente_cumulatief.csv",
     sep=';'
 )
-initial_read = initial_read[
-    (initial_read["Municipality_name"] != "") &
-    (initial_read["Municipality_name"].notna())
-]
+COVID_DATA["Date_of_report"] = pd.to_datetime(COVID_DATA["Date_of_report"])
 
-COVID_DATA = initial_read.copy()
-initial_read = None
-METRICS = [
-    'Total_reported', 'Hospital_admission', 'Deceased'
-]
-COVID_DATA.sort_values(
-    by=["Municipality_code", "Municipality_name", "Date_of_report"],
-    inplace=True
+
+## Replace faulty data ##
+COVID_DATA["Province"] = COVID_DATA["Province"].replace(
+    {"FryslÃ¢n": 'Friesland'}
 )
+
+
+# Remove all data poits which don't have a municipality name
+COVID_DATA = COVID_DATA[COVID_DATA["Municipality_name"] != ""]
+COVID_DATA = COVID_DATA[(COVID_DATA["Municipality_name"].notna())]
+
 
 ##  Read population data ##
 mun_population_data = pd.read_csv("data/NL_Population_Latest.csv")
 mun_population_data = mun_population_data.rename(columns={
     "PopulationOn31December_20": "Population"
 })
+
+
+## Merge the population data ##
 COVID_DATA = COVID_DATA.merge(
-    mun_population_data, left_on="Municipality_code", right_on="Regions")
+    mun_population_data,
+    left_on="Municipality_code",
+    right_on="Regions",
+    how="inner"
+)
 
 ## Compute daily values ##
-for feat in METRICS:
-    COVID_DATA[f"Daily_{feat}"] = COVID_DATA.groupby("Municipality_name")[feat].transform(
+COVID_DATA = COVID_DATA.sort_values(
+    by=["Municipality_code", "Municipality_name", "Date_of_report"]
+)
+for metric in METRICS:
+    COVID_DATA[f"Daily_{metric}"] = COVID_DATA.groupby("Municipality_name")[metric].transform(
         lambda x: x.diff().fillna(0)
     )
-    # COVID_DATA[f"Daily_{feat}"] = np.clip(
-    #     COVID_DATA[f"Daily_{feat}"], a_min=0, a_max=None
-    # )
 
 
 ## Aggregate data per province ##
-PROVINCE_COLS = [f"Daily_{m}" for m in METRICS] + METRICS + ["Population"]
+PROVINCE_COLS = [
+    f"Daily_{metric}" for metric in METRICS] + METRICS + ["Population"]
 PROVINCIAL_COVID_DATA = COVID_DATA.groupby(["Province", "Date_of_report"]).agg(
-    {col: np.sum for col in PROVINCE_COLS})
-PROVINCIAL_COVID_DATA = PROVINCIAL_COVID_DATA.reset_index()
+    {col: np.sum for col in PROVINCE_COLS}
+).reset_index()
 
 
-unique_municipalities = sorted(set(COVID_DATA["Municipality_name"]))
-unique_provinces = sorted(set(COVID_DATA["Province"]))
+## Calculate unique municipalities which have both population and covid data ##
+UNIQUE_MUNICIPALITIES = np.unique(COVID_DATA["Municipality_name"])
+UNIQUE_PROVINCES = np.unique(COVID_DATA["Province"])
+
 
 ## Setup the dash app ##
 app = dash.Dash(
@@ -73,8 +99,10 @@ app.layout = html.Div([
         html.H6("Select municipalities:"),
         dcc.Dropdown(
             id='selected_municipalities',
-            options=[{'label': i, 'value': i}
-                     for i in sorted(unique_municipalities)],
+            options=[
+                {'label': i, 'value': i}
+                for i in sorted(UNIQUE_MUNICIPALITIES)
+            ],
             value=sorted(["'s-Gravenhage", 'Utrecht', 'Eindhoven', 'Heerlen']),
             style={
                 'textAlign': 'center',
@@ -100,8 +128,7 @@ app.layout = html.Div([
         html.H6("Metric:"),
         dcc.Dropdown(
             id='covid_metric',
-            options=[{'label': i, 'value': i}
-                     for i in METRICS],
+            options=[{'label': i.replace("_", " "), 'value': i} for i in METRICS],
             value=METRICS[0],
             style={
                 'textAlign': 'left',
@@ -129,7 +156,7 @@ app.layout = html.Div([
             type="number",
             placeholder="Rolling Window",
             min=1,
-            max=50,
+            max=100,
             step=1,
             value=5,
             debounce=False,
@@ -159,9 +186,11 @@ app.layout = html.Div([
         html.H6("Data type:"),
         dcc.RadioItems(
             id='data_type',
-            options=[{'label': i, 'value': i}
-                     for i in ["Absolute", "Per 100 people"]],
-            value="Per 100 people",
+            options=[
+                {'label': i, 'value': i}
+                for i in ["Absolute", "Population Adjusted"]
+            ],
+            value="Population Adjusted",
             style={
                 'textAlign': 'left',
                 'align': 'center',
@@ -206,7 +235,7 @@ app.layout = html.Div([
         html.H6("Select provinces:"),
         dcc.Dropdown(
             id='selected_provinces',
-            options=[{'label': i, 'value': i} for i in unique_provinces],
+            options=[{'label': i, 'value': i} for i in UNIQUE_PROVINCES],
             value=sorted(
                 ['Zuid-Holland', 'Noord-Brabant', 'Utrecht', 'Limburg']),
             style={
@@ -247,19 +276,22 @@ app.layout = html.Div([
         'display': 'inline-block',
         'padding': '0 20'
     }),
-
 ])
 
 
 @app.callback(
-    Output('daily_figure', 'figure'),
-    Output('total_figure', 'figure'),
-    Input('selected_municipalities', 'value'),
-    Input('covid_metric', 'value'),
-    Input('moving_avg', 'value'),
-    Input('data_type', 'value'),
+    [
+        Output('daily_figure', 'figure'),
+        Output('total_figure', 'figure'),
+    ],
+    [
+        Input('selected_municipalities', 'value'),
+        Input('covid_metric', 'value'),
+        Input('moving_avg', 'value'),
+        Input('data_type', 'value'),
+    ]
 )
-def generate_data(selected_municipalities, covid_metric, moving_avg, data_type):
+def process_and_render_muns(selected_municipalities, covid_metric, moving_avg, data_type):
     selected_municipalities = sorted(selected_municipalities)
 
     if len(selected_municipalities) > 0:
@@ -267,24 +299,22 @@ def generate_data(selected_municipalities, covid_metric, moving_avg, data_type):
             selected_municipalities)].copy()
     else:
         random_municipalities = np.random.choice(
-            list(unique_municipalities), size=5)
+            list(UNIQUE_MUNICIPALITIES), size=5)
         mun_data = COVID_DATA[COVID_DATA["Municipality_name"].isin(
             random_municipalities)].copy()
-
-    mun_data.sort_values(
-        by=["Municipality_name", "Date_of_report"], inplace=True)
 
     if moving_avg not in [None, 0, 1]:
         mun_data[f"Daily_{covid_metric}"] =\
             mun_data.groupby("Municipality_name")[f"Daily_{covid_metric}"].transform(
-                lambda x: x.rolling(
+                lambda x: x[::-1].rolling(
                     window=int(moving_avg),
                     min_periods=1,
                     center=False
-                ).mean()
+                )
+                .mean()[::-1]
         )
 
-    if data_type == "Per 100 people":
+    if data_type == "Population Adjusted":
         mun_data[f"Daily_{covid_metric}"] = (
             mun_data[f"Daily_{covid_metric}"] / mun_data["Population"] * 100
         )
@@ -292,64 +322,82 @@ def generate_data(selected_municipalities, covid_metric, moving_avg, data_type):
             mun_data[covid_metric] / mun_data["Population"] * 100
         )
 
+    ## Round the data to 3 significant digits ##
+    mun_data[f"Daily_{covid_metric}"] = mun_data[f"Daily_{covid_metric}"].apply(
+        lambda x: round_significant_digits(x, 3))
+    mun_data[covid_metric] = mun_data[covid_metric].apply(
+        lambda x: round_significant_digits(x, 3))
+
     ## Add figure for daily numbers ##
-    daily_figure = go.Figure()
+    daily_mun_figure = go.Figure()
     for grp, df in mun_data.groupby("Municipality_name"):
-        daily_figure.add_trace(
+        daily_mun_figure.add_trace(
             go.Scatter(
                 x=df["Date_of_report"],
                 y=df[f"Daily_{covid_metric}"],
                 name=grp,
                 mode="markers+lines",
                 line_shape="spline",
-                marker={"size": 2}
+                marker={"size": 2},
+                hovertemplate="%{x}<br>%{y}",
             )
         )
-    daily_figure.update_layout(
-        title=f"Daily {covid_metric} ({data_type})".replace("_", " "),
+    daily_mun_figure.update_layout(
+        title=f"Daily {covid_metric} ({data_type})"
+        .title()
+        .replace("_", " ")
+        .replace("Population Adjusted", f"per {PER_POPULATION} people"),
         title_x=0.5,
     )
-    daily_figure.update_xaxes(title="Date of report")
+    daily_mun_figure.update_xaxes(title="Date of report")
 
     ## Add figure for total numbers ##
-    total_figure = go.Figure()
+    total_mun_figure = go.Figure()
     for grp, df in mun_data.groupby("Municipality_name"):
-        total_figure.add_trace(
+        total_mun_figure.add_trace(
             go.Scatter(
                 x=df["Date_of_report"],
                 y=df[covid_metric],
                 name=grp,
                 mode="markers+lines",
                 line_shape="spline",
-                marker={"size": 2}
+                marker={"size": 2},
+                hovertemplate="%{x}<br>%{y}",
             )
         )
-    total_figure.update_yaxes(title_text="")
-    total_figure.update_xaxes(title_text="Date of report")
-    total_figure.update_layout(
-        title=f"{covid_metric} ({data_type})".replace("_", " "),
+    total_mun_figure.update_yaxes(title_text="")
+    total_mun_figure.update_xaxes(title_text="Date of report")
+    total_mun_figure.update_layout(
+        title=f"{covid_metric} ({data_type})"
+        .title()
+        .replace("_", " ")
+        .replace("Population Adjusted", f"per {PER_POPULATION} people"),
         title_x=0.5,
     )
 
-    return (daily_figure, total_figure)
+    return (daily_mun_figure, total_mun_figure)
 
 
-@ app.callback(
-    Output('daily_province_figure', 'figure'),
-    Output('total_province_figure', 'figure'),
-    Input('selected_provinces', 'value'),
-    Input('covid_metric', 'value'),
-    Input('moving_avg', 'value'),
-    Input('data_type', 'value'),
+@app.callback(
+    [
+        Output('daily_province_figure', 'figure'),
+        Output('total_province_figure', 'figure'),
+    ],
+    [
+        Input('selected_provinces', 'value'),
+        Input('covid_metric', 'value'),
+        Input('moving_avg', 'value'),
+        Input('data_type', 'value'),
+    ]
 )
-def generate_data_province_wise(selected_provinces, covid_metric, moving_avg, data_type):
+def process_and_render_provinces(selected_provinces, covid_metric, moving_avg, data_type):
     if len(selected_provinces) > 0:
         province_data_selected = PROVINCIAL_COVID_DATA[PROVINCIAL_COVID_DATA["Province"].isin(
             selected_provinces)].copy()
     else:
         province_data_selected = PROVINCIAL_COVID_DATA.copy()
 
-    if data_type == "Per 100 people":
+    if data_type == "Population Adjusted":
         province_data_selected[f"Daily_{covid_metric}"] = (
             province_data_selected[f"Daily_{covid_metric}"] /
             province_data_selected["Population"] * 100
@@ -362,13 +410,18 @@ def generate_data_province_wise(selected_provinces, covid_metric, moving_avg, da
     if moving_avg not in [None, 0, 1]:
         province_data_selected[f"Daily_{covid_metric}"] =\
             province_data_selected.groupby("Province")[f"Daily_{covid_metric}"].transform(
-            lambda x: x.rolling(
+            lambda x: x[::-1].rolling(
                 window=int(moving_avg),
                 min_periods=1,
                 center=False
             )
-            .mean()
+            .mean()[::-1]
         )
+
+    province_data_selected[f"Daily_{covid_metric}"] = province_data_selected[f"Daily_{covid_metric}"].apply(
+        round_significant_digits)
+    province_data_selected[covid_metric] = province_data_selected[covid_metric].apply(
+        round_significant_digits)
 
     daily_province_figure = go.Figure()
     for grp, df in province_data_selected.groupby("Province"):
@@ -379,13 +432,17 @@ def generate_data_province_wise(selected_provinces, covid_metric, moving_avg, da
                 name=grp,
                 mode="markers+lines",
                 line_shape="spline",
-                marker={"size": 2}
+                marker={"size": 2},
+                hovertemplate="%{x}<br>%{y}",
             )
         )
     daily_province_figure.update_xaxes(title_text="Date of report")
     daily_province_figure.update_yaxes(title_text="")
     daily_province_figure.update_layout(
-        title=f"Daily {covid_metric} ({data_type})".replace("_", " "),
+        title=f"Daily {covid_metric} ({data_type})"
+        .title()
+        .replace("_", " ")
+        .replace("Population Adjusted", f"per {PER_POPULATION} people"),
         title_x=0.5,
     )
 
@@ -399,12 +456,16 @@ def generate_data_province_wise(selected_provinces, covid_metric, moving_avg, da
                 mode="markers+lines",
                 line_shape="spline",
                 marker={"size": 2},
+                hovertemplate="%{x}<br>%{y}",
             )
         )
     total_province_figure.update_xaxes(title_text="Date of report")
     total_province_figure.update_yaxes(title_text="")
     total_province_figure.update_layout(
-        title=f"{covid_metric} ({data_type})".replace("_", " "),
+        title=f"{covid_metric} ({data_type})"
+        .title()
+        .replace("_", " ")
+        .replace("Population Adjusted", f"per {PER_POPULATION} people"),
         title_x=0.5,
     )
 
@@ -412,15 +473,26 @@ def generate_data_province_wise(selected_provinces, covid_metric, moving_avg, da
 
 
 def main():
-    if "--dev" in sys.argv[1:]:
-        app.run_server(debug=True, host=APP_HOST, port=APP_PORT)
+    APP_HOST = "0.0.0.0"
+    APP_HOST_DEV = "127.0.0.1"
+    APP_PORT = 5005
+    time_now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(
+        f"Starting dashboard for COVID-19 data in The Netherlands at {time_now}")
+    if "--dev" in sys.argv:
+        app.run_server(
+            debug=True,
+            host=APP_HOST_DEV,
+            port=APP_PORT
+        )
     else:
-        waitress.serve(app.server, host=APP_HOST, port=APP_PORT, threads=8)
+        waitress.serve(
+            app.server,
+            host=APP_HOST,
+            port=APP_PORT,
+            threads=max(4, os.cpu_count() - 1)
+        )
 
 
 if __name__ == "__main__":
-    NOW = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Starting dashboard for COVID-19 data in The Netherlands at {NOW}")
-    APP_HOST = "127.0.0.1"
-    APP_PORT = 5005
     sys.exit(main())
