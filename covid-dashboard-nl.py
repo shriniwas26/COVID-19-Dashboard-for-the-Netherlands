@@ -99,6 +99,7 @@ app = dash.Dash(
     assets_folder='assets'
 )
 app.title = "COVID-19 Dashboard - The Netherlands"
+server = app.server
 
 app.layout = html.Div([
     html.Div([
@@ -493,11 +494,9 @@ def main():
             port=APP_PORT
         )
     else:
-        waitress.serve(
-            app.server,
-            host=APP_HOST,
-            port=APP_PORT,
-            threads=max(4, os.cpu_count() - 1)
+        app.run_server(
+            host="0.0.0.0",
+            debug=True,
         )
 
 
