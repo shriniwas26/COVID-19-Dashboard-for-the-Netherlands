@@ -1,6 +1,4 @@
 import datetime
-import math
-import os
 import sys
 
 import dash
@@ -8,7 +6,6 @@ import dash.dcc as dcc
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-import waitress
 from dash import html
 from dash.dependencies import Input, Output
 
@@ -306,10 +303,7 @@ def process_and_render_muns(selected_municipalities, covid_metric, moving_avg, d
         mun_data = COVID_DATA[COVID_DATA["Municipality_name"].isin(
             selected_municipalities)].copy()
     else:
-        random_municipalities = np.random.choice(
-            list(UNIQUE_MUNICIPALITIES), size=5)
-        mun_data = COVID_DATA[COVID_DATA["Municipality_name"].isin(
-            random_municipalities)].copy()
+        return go.Figure(), go.Figure()
 
     if moving_avg not in [None, 0, 1]:
         mun_data[f"Daily_{covid_metric}"] =\
