@@ -32,11 +32,11 @@ This respository is built to analyze/visualize COVID-19 related data. The dashbo
 * Change to the project directory.
 * Run in deployment
     ```{bash}
-    python3 covid-dashboard-nl.py
+    gunicorn --bind 127.0.0.1:5005 covid-dashboard-nl:server
     ```
 * Run for development (for auto-reloading on source change)
     ```{bash}
-    python3 covid-dashboard-nl.py --dev
+    python3 covid-dashboard-nl.py
     ```
 * Update to the latest data, as published by RIVM
     ```{bash}
