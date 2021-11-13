@@ -47,7 +47,7 @@ COVID_DATA["Province"] = COVID_DATA["Province"].replace(
 )
 
 
-# Remove all data poits which don't have a municipality name
+# Remove all data points which don't have a municipality name
 COVID_DATA = COVID_DATA[COVID_DATA["Municipality_name"] != ""]
 COVID_DATA = COVID_DATA[(COVID_DATA["Municipality_name"].notna())]
 
