@@ -93,7 +93,8 @@ UNIQUE_PROVINCES = np.unique(COVID_DATA["Province"])
 ## Setup the dash app ##
 app = dash.Dash(
     __name__,
-    assets_folder='assets'
+    assets_folder='assets',
+    # url_base_pathname='/covid-nl/'
 )
 app.title = "COVID-19 Dashboard - The Netherlands"
 server = app.server
