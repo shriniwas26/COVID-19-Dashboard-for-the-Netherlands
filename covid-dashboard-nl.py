@@ -41,15 +41,18 @@ except:
 COVID_DATA["Date_of_report"] = pd.to_datetime(COVID_DATA["Date_of_report"])
 
 
+# Remove all data points which don't have a municipality name
+COVID_DATA = COVID_DATA[COVID_DATA["Municipality_name"] != ""]
+COVID_DATA = COVID_DATA[(COVID_DATA["Municipality_name"].notna())]
+
+
 ## Replace faulty data ##
 COVID_DATA["Province"] = COVID_DATA["Province"].replace(
     {"FryslÃ¢n": 'Friesland'}
 )
-
-
-# Remove all data points which don't have a municipality name
-COVID_DATA = COVID_DATA[COVID_DATA["Municipality_name"] != ""]
-COVID_DATA = COVID_DATA[(COVID_DATA["Municipality_name"].notna())]
+# Disambiguate Mun name by Mun code
+COVID_DATA["Municipality_name"] = COVID_DATA.groupby(
+    "Municipality_code")["Municipality_name"].transform(lambda x: sorted(x)[0])
 
 
 ##  Read population data ##
@@ -66,6 +69,7 @@ COVID_DATA = COVID_DATA.merge(
     right_on="Regions",
     how="inner"
 )
+
 
 ## Compute daily values ##
 COVID_DATA = COVID_DATA.sort_values(
