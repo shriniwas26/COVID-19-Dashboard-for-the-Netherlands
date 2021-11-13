@@ -475,23 +475,15 @@ def process_and_render_provinces(selected_provinces, covid_metric, moving_avg, d
 
 
 def main():
-    APP_HOST = "0.0.0.0"
-    APP_HOST_DEV = "127.0.0.1"
     APP_PORT = 5005
     time_now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(
         f"Starting dashboard for COVID-19 data in The Netherlands at {time_now}")
-    if "--dev" in sys.argv:
-        app.run_server(
-            debug=True,
-            host=APP_HOST_DEV,
-            port=APP_PORT
-        )
-    else:
-        app.run_server(
-            host="0.0.0.0",
-            debug=True,
-        )
+    app.run_server(
+        debug=True,
+        host="0.0.0.0",
+        port=APP_PORT
+    )
 
 
 if __name__ == "__main__":
