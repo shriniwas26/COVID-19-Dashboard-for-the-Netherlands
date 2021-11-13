@@ -164,7 +164,7 @@ app.layout = html.Div([
             max=100,
             step=1,
             value=5,
-            debounce=True,
+            debounce=False,
             style={
                 'align': 'center',
                 'vertical-align': 'top',
