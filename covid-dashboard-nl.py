@@ -29,7 +29,7 @@ METRICS = ['Total_reported', 'Hospital_admission', 'Deceased']
 ## Initial reading and sanitization steps ##
 try:
     COVID_DATA = pd.read_csv(
-        "data/COVID-19_aantallen_gemeente_cumulatief.csv",
+        "https://data.rivm.nl/covid-19/COVID-19_aantallen_gemeente_cumulatief.csv",
         sep=";"
     )
 except:
