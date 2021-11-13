@@ -377,6 +377,14 @@
     border-top: 1px solid #E1E1E1; }
 
 
+  .Select-control .Select-value {
+    border-radius: 20px;
+  }
+
+  .Select-control .Select-value * {
+    border-radius: 20px;
+  }
+
   /* Clearing
   –––––––––––––––––––––––––––––––––––––––––––––––––– */
 
