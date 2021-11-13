@@ -27,17 +27,10 @@ def round_significant_digits(x, n=2):
 METRICS = ['Total_reported', 'Hospital_admission', 'Deceased']
 
 ## Initial reading and sanitization steps ##
-try:
-    COVID_DATA = pd.read_csv(
-        "data/COVID-19_aantallen_gemeente_cumulatief.csv",
-        sep=";"
-    )
-except:
-    print("Cannot read url, reading locally.")
-    COVID_DATA = pd.read_csv(
-        "data/COVID-19_aantallen_gemeente_cumulatief.csv",
-        sep=";"
-    )
+COVID_DATA = pd.read_csv(
+    "data/COVID-19_aantallen_gemeente_cumulatief.csv",
+    sep=";"
+)
 COVID_DATA["Date_of_report"] = pd.to_datetime(COVID_DATA["Date_of_report"])
 
 
