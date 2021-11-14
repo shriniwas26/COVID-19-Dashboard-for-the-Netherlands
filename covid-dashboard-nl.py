@@ -26,19 +26,35 @@ def round_significant_digits(x, n=2):
 ## Metrics to display ##
 METRICS = ['Total_reported', 'Hospital_admission', 'Deceased']
 
-## Initial reading and sanitization steps ##
-try:
-    COVID_DATA = pd.read_csv(
-        "https://data.rivm.nl/covid-19/COVID-19_aantallen_gemeente_cumulatief.csv",
-        sep=";"
-    )
-except:
-    print("Cannot read url, reading locally.")
-    COVID_DATA = pd.read_csv(
-        "data/COVID-19_aantallen_gemeente_cumulatief.csv",
-        sep=";"
-    )
+
+COVID_DATA = pd.read_csv(
+    "data/COVID-19_aantallen_gemeente_cumulatief.csv",
+    sep=";"
+)
 COVID_DATA["Date_of_report"] = pd.to_datetime(COVID_DATA["Date_of_report"])
+
+
+date_now = datetime.datetime.now().date()
+date_max_df = COVID_DATA["Date_of_report"].max().date()
+print(f"Date now: {date_now} Date in df: {date_max_df}")
+if date_now - date_max_df > datetime.timedelta(days=1):
+    print("Data is older than 1 day, fetching from URL")
+    try:
+        COVID_DATA = pd.read_csv(
+            "https://data.rivm.nl/covid-19/COVID-19_aantallen_gemeente_cumulatief.csv",
+            sep=";"
+        )
+        COVID_DATA.to_csv(
+            "data/COVID-19_aantallen_gemeente_cumulatief.csv",
+            sep=";",
+            index=False,
+            line_terminator="\r\n"
+        )
+        COVID_DATA["Date_of_report"] = pd.to_datetime(COVID_DATA["Date_of_report"])
+    except:
+        print("Cannot read url reverting to local, reading locally.")
+
+
 
 
 # Remove all data points which don't have a municipality name
@@ -47,9 +63,10 @@ COVID_DATA = COVID_DATA[(COVID_DATA["Municipality_name"].notna())]
 
 
 ## Replace faulty data ##
-COVID_DATA["Province"] = COVID_DATA["Province"].replace(
-    {"FryslÃ¢n": 'Friesland'}
-)
+COVID_DATA["Province"] = COVID_DATA["Province"].replace({
+    "FryslÃ¢n": "Friesland",
+    "Fryslân": "Friesland",
+})
 # Disambiguate Mun name by Mun code
 COVID_DATA["Municipality_name"] = COVID_DATA.groupby(
     "Municipality_code")["Municipality_name"].transform(lambda x: sorted(x)[0])
