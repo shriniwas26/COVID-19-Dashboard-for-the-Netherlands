@@ -20,4 +20,4 @@ COPY ./ ./
 
 # Run!
 EXPOSE 5005
-CMD ["/opt/conda/envs/dash_env/bin/python", "./covid-dashboard-nl.py"]
+CMD ["/opt/conda/envs/dash_env/bin/gunicorn", "--bind=0.0.0.0:5005", "covid-dashboard-nl:server"]
