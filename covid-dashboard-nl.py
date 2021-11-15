@@ -50,11 +50,10 @@ if date_now - date_max_df > datetime.timedelta(days=1):
             index=False,
             line_terminator="\r\n"
         )
-        COVID_DATA["Date_of_report"] = pd.to_datetime(COVID_DATA["Date_of_report"])
+        COVID_DATA["Date_of_report"] = pd.to_datetime(
+            COVID_DATA["Date_of_report"])
     except:
         print("Cannot read url reverting to local, reading locally.")
-
-
 
 
 # Remove all data points which don't have a municipality name
