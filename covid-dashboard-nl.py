@@ -1,13 +1,13 @@
 import datetime
 import sys
 
+import dash
+import dash.dcc as dcc
 import numpy as np
 import pandas as pd
-import dash
-import dash_core_components as dcc
-import dash_html_components as html
-from dash.dependencies import Input, Output
 import plotly.graph_objects as go
+from dash import html
+from dash.dependencies import Input, Output
 
 PER_POPULATION = 100
 
