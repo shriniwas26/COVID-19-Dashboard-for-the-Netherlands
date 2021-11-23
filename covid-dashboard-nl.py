@@ -1,17 +1,22 @@
 import datetime
 import sys
 
-import dash
-import dash.dcc as dcc
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import dash
+import dash.dcc as dcc
 from dash import html
 from dash.dependencies import Input, Output
 
+import update_data
+
+##### Define constants #####
 PER_POPULATION = 100
+COVID_DATA_FILE = "data/COVID-19_aantallen_gemeente_cumulatief.csv"
 
 
+##### Utility functions #####
 def round_significant_digits(x, n=2):
     if type(x) in [int, float]:
         if x == 0:
@@ -28,7 +33,7 @@ METRICS = ['Total_reported', 'Hospital_admission', 'Deceased']
 
 
 COVID_DATA = pd.read_csv(
-    "data/COVID-19_aantallen_gemeente_cumulatief.csv",
+    COVID_DATA_FILE,
     sep=";"
 )
 COVID_DATA["Date_of_report"] = pd.to_datetime(COVID_DATA["Date_of_report"])
@@ -40,15 +45,10 @@ print(f"Date now: {date_now} Date in df: {date_max_df}")
 if date_now - date_max_df > datetime.timedelta(days=1):
     print("Data is older than 1 day, fetching from URL")
     try:
+        update_data.update()
         COVID_DATA = pd.read_csv(
-            "https://data.rivm.nl/covid-19/COVID-19_aantallen_gemeente_cumulatief.csv",
+            COVID_DATA_FILE,
             sep=";"
-        )
-        COVID_DATA.to_csv(
-            "data/COVID-19_aantallen_gemeente_cumulatief.csv",
-            sep=";",
-            index=False,
-            line_terminator="\r\n"
         )
         COVID_DATA["Date_of_report"] = pd.to_datetime(
             COVID_DATA["Date_of_report"])
@@ -114,7 +114,8 @@ UNIQUE_PROVINCES = np.unique(COVID_DATA["Province"])
 app = dash.Dash(
     __name__,
     assets_folder='assets',
-    url_base_pathname='/covid-nl/'
+    url_base_pathname='/',
+    show_undo_redo=True,
 )
 app.title = "COVID-19 Dashboard - The Netherlands"
 server = app.server
