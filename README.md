@@ -24,7 +24,7 @@ This respository is built to analyze/visualize COVID-19 related data. The dashbo
 
 * Install requirements
     ```
-    conda install --file requirements.txt
+    conda install -c conda-forge --file requirements.txt
     ```
 
 ### Executing program
