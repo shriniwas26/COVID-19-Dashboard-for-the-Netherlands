@@ -1,1 +1,1 @@
-web: gunicorn covid-dashboard-nl:server
+web: gunicorn covid_dashboard_nl:server

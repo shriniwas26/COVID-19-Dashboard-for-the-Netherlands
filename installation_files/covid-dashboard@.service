@@ -5,8 +5,8 @@ After=network.target
 [Service]
 User=%i
 Type=simple
-WorkingDirectory=/home/%i/covid-dashboard/
-ExecStart=/home/%i/opt/ml-tools/bin/python3 covid-dashboard-nl.py deploy
+WorkingDirectory=/home/%i/covid19-dashboard/
+ExecStart=/home/%i/opt/ml-tools/bin/python3 covid_dashboard_nl.py deploy
 Restart=always
 RestartSec=5
 StandardOutput=/home/%i/maize_emergence_dashboard.log
