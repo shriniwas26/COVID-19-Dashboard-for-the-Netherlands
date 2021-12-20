@@ -16,15 +16,16 @@ output_filepath = os.path.join(
 def update():
     req = requests.get(DATA_URL)
     assert req.status_code == 200
-
     df = pd.read_csv(io.StringIO(req.text), sep=";")
-
+    print(f"Successful request to {DATA_URL}")
+    temp_file = output_filepath + ".tmp"
     df.to_csv(
-        output_filepath,
+        temp_file,
         sep=";",
         index=False,
         line_terminator="\r\n"
     )
+    os.replace(temp_file, output_filepath)
 
 
 if __name__ == "__main__":
