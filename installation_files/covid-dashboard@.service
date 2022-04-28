@@ -1,5 +1,5 @@
 [Unit]
-Description=Visualizer for Maize Emergence Experiment
+Description=Visualizer for COVID-19 data
 After=network.target
 
 [Service]
@@ -9,7 +9,7 @@ WorkingDirectory=/home/%i/covid19-dashboard/
 ExecStart=/home/%i/opt/ml-tools/bin/python3 covid_dashboard_nl.py deploy
 Restart=always
 RestartSec=5
-StandardOutput=/home/%i/maize_emergence_dashboard.log
+StandardOutput=/home/%i/covid19_dashboard.log
 Nice=0
 CPUSchedulingPolicy=fifo
 
