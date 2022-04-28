@@ -158,7 +158,7 @@ app.layout = html.Div([
             id='covid_metrics',
             options=[{'label': i.replace("_", " "), 'value': i}
                      for i in METRICS],
-            value=METRICS,
+            value=['Total_reported', 'Deceased'],
             multi=True,
             style={
                 'textAlign': 'left',
