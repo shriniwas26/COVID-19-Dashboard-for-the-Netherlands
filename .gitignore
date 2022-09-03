@@ -1,7 +1,6 @@
 .venv/
 .ipynb_checkpoints
 *.pdf
-.vscode
 .~lock*
 *.pyc
 *.png

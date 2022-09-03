@@ -6,10 +6,10 @@ import pandas as pd
 
 DATA_URL = "https://data.rivm.nl/covid-19/COVID-19_aantallen_gemeente_cumulatief.csv"
 
-file_path = os.path.realpath(__file__)
-file_dir = os.path.split(file_path)[0]
+self_file_path = os.path.realpath(__file__)
+self_file_dir = os.path.split(self_file_path)[0]
 output_filepath = os.path.join(
-    file_dir,
+    self_file_dir,
     "data/COVID-19_aantallen_gemeente_cumulatief.csv"
 )
 
