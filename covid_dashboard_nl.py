@@ -1,13 +1,14 @@
 #! /usr/bin/env python3
 
 import datetime
+import os
 import sys
 
+import dash
+import dash.dcc as dcc
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-import dash
-import dash.dcc as dcc
 from dash import html
 from dash.dependencies import Input, Output
 
@@ -37,12 +38,13 @@ METRICS = ["Total_reported", "Hospital_admission", "Deceased"]
 COVID_DATA = pd.read_csv(COVID_DATA_FILE, sep=";")
 COVID_DATA["Date_of_report"] = pd.to_datetime(COVID_DATA["Date_of_report"])
 
-
-date_now = datetime.datetime.now().date()
-date_max_df = COVID_DATA["Date_of_report"].max().date()
-print(f"Date now: {date_now} Date in df: {date_max_df}")
-if date_now - date_max_df > datetime.timedelta(days=1):
-    print("Data is older than 1 day, fetching from URL")
+datetime_last_updated = datetime.datetime.fromtimestamp(
+    os.path.getmtime(COVID_DATA_FILE)
+)
+datetime_now = datetime.datetime.now()
+print(f"Date now: {datetime_now}. Last updated: {datetime_last_updated}.")
+if datetime_now - datetime_last_updated > datetime.timedelta(days=1):
+    print("Data fetched before 1 day, fetching from URL")
     try:
         update_data.update()
         COVID_DATA = pd.read_csv(COVID_DATA_FILE, sep=";")
