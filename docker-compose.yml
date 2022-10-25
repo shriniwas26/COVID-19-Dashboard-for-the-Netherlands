@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  app:
+    build:
+      context: .
+    ports:
+      - 8080:8080
+    environment:
+      # Does nothing, just as an example
+      - MY_VARIABLE=0
+    volumes:
+      - ./:/code
+    # command: gunicorn --bind=0.0.0.0:8080 covid_dashboard_nl:server
+    command: python covid_dashboard_nl.py --dev

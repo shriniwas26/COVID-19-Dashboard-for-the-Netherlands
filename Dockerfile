@@ -1,8 +1,8 @@
-FROM continuumio/miniconda3
+FROM python:3.10.8-slim-bullseye
 LABEL maintainer "Shriniwas <shriniwas26@gmail.com>"
 
-RUN apt update && apt dist-upgrade -y && apt autoremove -y
-RUN apt install -y tmux vim htop
+RUN apt update && apt dist-upgrade -y
+RUN apt install -y vim build-essential
 
 WORKDIR /code/
 
@@ -14,5 +14,4 @@ RUN pip install -r requirements.txt
 COPY ./ ./
 
 # Run!
-EXPOSE 5005
-CMD ["gunicorn", "--bind=0.0.0.0:5005", "covid_dashboard_nl:server"]
+EXPOSE 8080
