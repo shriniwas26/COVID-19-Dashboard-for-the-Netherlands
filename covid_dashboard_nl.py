@@ -34,7 +34,6 @@ def round_significant_digits(x, n=2):
 ## Metrics to display ##
 METRICS = ["Total_reported", "Hospital_admission", "Deceased"]
 
-
 COVID_DATA = pd.read_csv(COVID_DATA_FILE, sep=";")
 COVID_DATA["Date_of_report"] = pd.to_datetime(COVID_DATA["Date_of_report"])
 
@@ -60,7 +59,6 @@ if (datetime_now - datetime_last_updated) >= datetime.timedelta(days=1):
 COVID_DATA = COVID_DATA[COVID_DATA["Municipality_name"] != ""]
 COVID_DATA = COVID_DATA[(COVID_DATA["Municipality_name"].notna())]
 
-
 ## Replace faulty data ##
 COVID_DATA["Province"] = COVID_DATA["Province"].replace(
     {
@@ -68,11 +66,11 @@ COVID_DATA["Province"] = COVID_DATA["Province"].replace(
         "Fryslân": "Friesland",
     }
 )
-# Disambiguate Mun name by Mun code
+
+## Disambiguate Municipality name by Municipality code ##
 COVID_DATA["Municipality_name"] = COVID_DATA.groupby("Municipality_code")[
     "Municipality_name"
 ].transform(lambda x: sorted(x)[0])
-
 
 ##  Read population data ##
 mun_population_data = pd.read_csv("data/NL_Population_Latest.csv")
@@ -80,12 +78,10 @@ mun_population_data = mun_population_data.rename(
     columns={"PopulationOn31December_20": "Population"}
 )
 
-
 ## Merge the population data ##
 COVID_DATA = COVID_DATA.merge(
     mun_population_data, left_on="Municipality_code", right_on="Regions", how="inner"
 )
-
 
 ## Compute daily values ##
 COVID_DATA = COVID_DATA.sort_values(
@@ -105,23 +101,52 @@ for covid_metric in METRICS:
         COVID_DATA[covid_metric] / COVID_DATA["Population"] * PER_POPULATION
     )
 
-## Aggregate data per province ##
-PROVINCE_COLS = (
-    [f"{metric}_daily_population_adjusted" for metric in METRICS]
-    + [f"{metric}_population_adjusted" for metric in METRICS]
-    + [f"{metric}_daily" for metric in METRICS]
-    + METRICS
-    + ["Population"]
+
+def get_provincial_data():
+    df = pd.read_csv(COVID_DATA_FILE, sep=";")
+    df = df[
+        df["Municipality_code"].isna() & df["Municipality_name"].isna()
+    ].reset_index(drop=True)
+    df = df.sort_values(by=["Date_of_report", "Province"])
+    for metric in METRICS:
+        df[f"{metric}_daily"] = COVID_DATA.groupby("Province")[metric].transform(
+            lambda x: x.diff().fillna(0)
+        )
+    return df
+
+
+PROVINCIAL_COVID_DATA = get_provincial_data()
+
+PROVINCIAL_POPULATION_DATA = pd.read_csv("data/Netherlands_population.csv").rename(
+    columns={"Population Estimate 2020-01-01": "Population"}
 )
-PROVINCIAL_COVID_DATA = (
-    COVID_DATA.groupby(["Province", "Date_of_report"])
-    .agg({col: np.sum for col in PROVINCE_COLS})
-    .reset_index()
+PROVINCIAL_POPULATION_DATA = PROVINCIAL_POPULATION_DATA[
+    PROVINCIAL_POPULATION_DATA["Status"] == "Province"
+].reset_index()
+PROVINCIAL_POPULATION_DATA["Short Name"] = PROVINCIAL_POPULATION_DATA["Name"].apply(
+    lambda x: x.split()[0]
 )
+
+
+PROVINCIAL_COVID_DATA = PROVINCIAL_COVID_DATA.merge(
+    PROVINCIAL_POPULATION_DATA, how="inner", left_on="Province", right_on="Short Name"
+)
+
+for covid_metric in METRICS:
+    PROVINCIAL_COVID_DATA[f"{covid_metric}_daily_population_adjusted"] = (
+        PROVINCIAL_COVID_DATA[f"{covid_metric}_daily"]
+        / PROVINCIAL_COVID_DATA["Population"]
+        * PER_POPULATION
+    )
+    PROVINCIAL_COVID_DATA[f"{covid_metric}_population_adjusted"] = (
+        PROVINCIAL_COVID_DATA[covid_metric]
+        / PROVINCIAL_COVID_DATA["Population"]
+        * PER_POPULATION
+    )
 
 ## Calculate unique municipalities which have both population and covid data ##
 UNIQUE_MUNICIPALITIES = np.unique(COVID_DATA["Municipality_name"])
-UNIQUE_PROVINCES = np.unique(COVID_DATA["Province"])
+UNIQUE_PROVINCES = np.unique(PROVINCIAL_COVID_DATA["Province"])
 
 ## Setup the dash app ##
 app = dash.Dash(
