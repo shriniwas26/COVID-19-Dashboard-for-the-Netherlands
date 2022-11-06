@@ -501,7 +501,7 @@ def process_and_render_provinces(
                 )
             )
         province_fig.update_layout(
-            title=f"Daily {covid_metric} <br> ({data_type})".title()
+            title=f"{column_name}".title()
             .replace("_", " ")
             .replace("Population Adjusted", f"per {PER_POPULATION} people"),
             title_x=0.5,

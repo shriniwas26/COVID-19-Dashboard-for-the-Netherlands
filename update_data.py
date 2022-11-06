@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-import json
 import os
-import datetime
 
 import pandas as pd
 
@@ -16,7 +14,8 @@ def update():
     )
     df = pd.read_csv(DATA_URL, sep=";")
     print(f"Successful request to {DATA_URL}")
-    df.to_csv(output_filepath, sep=";", index=False, lineterminator="\n")
+    df.to_csv(output_filepath, sep=";", index=False)
+
 
 if __name__ == "__main__":
     print("Downloading file...")
