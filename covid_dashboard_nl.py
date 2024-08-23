@@ -19,6 +19,7 @@ PER_POPULATION = 100
 COVID_DATA_FILE = "data/COVID-19_aantallen_gemeente_cumulatief.csv"
 DEFAULT_MUNICIPALITIES = ["Amsterdam", "Eindhoven", "Heerlen", "Nijmegen"]
 
+
 ##### Utility functions #####
 def round_significant_digits(x, n=2):
     if type(x) in [int, float]:
