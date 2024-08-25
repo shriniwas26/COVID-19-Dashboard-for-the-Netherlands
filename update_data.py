@@ -16,8 +16,14 @@ output_filepath = os.path.join(
 
 def update():
     req = requests.get(DATA_URL)
-    assert req.status_code == 200
-    df = pd.read_csv(io.StringIO(req.text), sep=";")
+    if req.status_code != 200:
+        print(f"Failed to request {DATA_URL}, HTTP status code {req.status_code}")
+        return
+
+    df = pd.read_csv(
+        io.StringIO(req.text),
+        sep=";",
+    )
     print(f"Successful request to {DATA_URL}")
     temp_file = output_filepath + ".tmp"
     df.to_csv(
@@ -26,9 +32,9 @@ def update():
         index=False,
     )
     os.replace(temp_file, output_filepath)
+    print("Success. File written!")
 
 
 if __name__ == "__main__":
     print("Downloading file...")
     update()
-    print("Success. File written!")
