@@ -14,4 +14,4 @@ services:
       - ./data:/app/data:ro
       - ./assets:/app/assets:ro
     restart: unless-stopped
-    command: python3 covid_dashboard_nl.py
+    # command: python3 covid_dashboard_nl.py
