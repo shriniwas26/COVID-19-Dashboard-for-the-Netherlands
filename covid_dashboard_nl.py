@@ -531,7 +531,7 @@ def main():
     APP_PORT = 8080
     time_now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"Starting dashboard for COVID-19 data in The Netherlands at {time_now}")
-    app.run_server(debug=True, host="0.0.0.0", port=APP_PORT)
+    app.run(debug=True, host="0.0.0.0", port=APP_PORT)
 
 
 if __name__ == "__main__":

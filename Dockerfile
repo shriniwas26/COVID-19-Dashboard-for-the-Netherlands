@@ -1,17 +1,16 @@
-FROM python:3.10.8-slim-bullseye
-LABEL maintainer "Shriniwas <shriniwas26@gmail.com>"
+FROM python:3.13-slim
 
-RUN apt-get update && apt-get dist-upgrade -y
-RUN apt-get install -y vim build-essential
+WORKDIR /app
 
-WORKDIR /code/
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --upgrade pip
+RUN pip install -v --no-cache-dir -r requirements.txt
 
-# Install dependencies
-COPY ./requirements.txt ./
-RUN pip install -r requirements.txt
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash app
 
-# Copy data and configs
-# COPY ./ ./
+COPY --chown=app:app . .
 
-# Run!
-EXPOSE 8080
+USER app
+
