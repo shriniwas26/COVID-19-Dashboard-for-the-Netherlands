@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  covid-dashboard:
+    build: .
+    ports:
+      - "5005:5005"
+    volumes:
+      - ./data:/app/data
+      - ./assets:/app/assets
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DASH_DEBUG=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Add a database service for future enhancements
+  # postgres:
+  #   image: postgres:15
+  #   environment:
+  #     POSTGRES_DB: covid_dashboard
+  #     POSTGRES_USER: dashboard_user
+  #     POSTGRES_PASSWORD: dashboard_password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+
+volumes:
+  postgres_data:

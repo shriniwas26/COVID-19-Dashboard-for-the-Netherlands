@@ -13,3 +13,19 @@ scratch.py
 Playground.ipynb
 scratch.ipynb
 rivm_download.csv
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+*.tfvars
+*.tfvars.json
+.terraformrc
+terraform.rc
+.terraform.tfstate.lock.info
+crash.log
+crash.*.log
+*.backup
+*.backup.*

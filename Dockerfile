@@ -1,23 +1,40 @@
-FROM continuumio/miniconda3
-LABEL maintainer "Shriniwas <shriniwas26@gmail.com>"
+FROM python:3.12-slim
 
-RUN apt update && apt dist-upgrade -y && apt autoremove -y
-RUN apt install -y tmux vim htop
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV DASH_DEBUG=1
 
-WORKDIR /code/
+# Set work directory
+WORKDIR /app
 
-# Create a conda environment for the app
-RUN conda create -n dash_env python=3.10
-RUN echo "source activate dash_env" > ~/.bashrc
-ENV PATH /opt/conda/envs/dash_env/bin:$PATH
+# Install system dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+    curl \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-COPY ./requirements.txt ./
-RUN conda install -n dash_env -c conda-forge --file requirements.txt -y
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
-# Copy data and configs
-COPY ./ ./
+# Copy application code
+COPY . .
 
-# Run!
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash app \
+    && chown -R app:app /app
+USER app
+
+# Expose port
 EXPOSE 5005
-CMD ["/opt/conda/envs/dash_env/bin/gunicorn", "--bind=0.0.0.0:5005", "covid-dashboard-nl:server"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:5005/health || exit 1
+
+# Run the application
+CMD ["gunicorn", "--bind", "0.0.0.0:5005", "--workers", "2", "--timeout", "120", "covid_dashboard_nl:server"]

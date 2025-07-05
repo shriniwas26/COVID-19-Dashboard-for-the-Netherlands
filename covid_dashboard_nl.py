@@ -32,7 +32,7 @@ def round_significant_digits(x, n=2):
 METRICS = ["Total_reported", "Hospital_admission", "Deceased"]
 
 
-COVID_DATA = pd.read_csv(COVID_DATA_FILE, sep=";")
+COVID_DATA: pd.DataFrame = pd.read_csv(COVID_DATA_FILE, sep=";")
 COVID_DATA["Date_of_report"] = pd.to_datetime(COVID_DATA["Date_of_report"])
 
 
@@ -54,8 +54,8 @@ COVID_DATA["Date_of_report"] = pd.to_datetime(COVID_DATA["Date_of_report"])
 
 
 # Remove all data points which don't have a municipality name
-COVID_DATA = COVID_DATA[COVID_DATA["Municipality_name"] != ""]
-COVID_DATA = COVID_DATA[(COVID_DATA["Municipality_name"].notna())]
+COVID_DATA = COVID_DATA.query("Municipality_name != ''").copy()
+COVID_DATA = COVID_DATA.query("Municipality_name.isna()").copy()
 
 
 ## Replace faulty data ##
