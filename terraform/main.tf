@@ -244,6 +244,80 @@ resource "aws_lb_target_group" "app" {
   }
 }
 
+# Route 53 Hosted Zone (if you register domain through Route 53)
+# resource "aws_route53_zone" "main" {
+#   name = "covid-dashboard.com"
+# }
+
+# Route 53 A Record pointing to ALB (only if HTTPS is enabled)
+resource "aws_route53_record" "app" {
+  count   = var.enable_https ? 1 : 0
+  zone_id = var.route53_zone_id
+  name    = var.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.main.dns_name
+    zone_id                = aws_lb.main.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# TXT record for Netlify domain verification
+resource "aws_route53_record" "netlify_verification" {
+  count   = var.netlify_verification_txt != "" ? 1 : 0
+  zone_id = var.route53_zone_id
+  name    = "@" # Root domain
+  type    = "TXT"
+  ttl     = "300"
+  records = [var.netlify_verification_txt]
+}
+
+# Certificate validation DNS record (only if HTTPS is enabled)
+resource "aws_route53_record" "cert_validation" {
+  for_each = var.enable_https ? {
+    for dvo in aws_acm_certificate.main[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  zone_id = var.route53_zone_id
+  name    = each.value.name
+  type    = each.value.type
+  records = [each.value.record]
+  ttl     = 60
+}
+
+# Certificate for custom domain (only if HTTPS is enabled)
+resource "aws_acm_certificate" "main" {
+  count             = var.enable_https ? 1 : 0
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Alternative certificate for ALB default domain (when no custom domain)
+resource "aws_acm_certificate" "alb_default" {
+  count             = var.enable_https && var.domain_name == "" ? 1 : 0
+  domain_name       = "*.elb.amazonaws.com"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Certificate validation (only if HTTPS is enabled)
+resource "aws_acm_certificate_validation" "main" {
+  count           = var.enable_https ? 1 : 0
+  certificate_arn = var.domain_name != "" ? aws_acm_certificate.main[0].arn : aws_acm_certificate.alb_default[0].arn
+}
+
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
@@ -255,7 +329,22 @@ resource "aws_lb_listener" "http" {
   }
 }
 
+# HTTPS listener - only created if HTTPS is enabled and certificate is available
+resource "aws_lb_listener" "https" {
+  count             = var.enable_https ? 1 : 0
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = aws_acm_certificate.main[0].arn
 
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+
+  depends_on = [aws_acm_certificate_validation.main]
+}
 
 # ECS Service
 resource "aws_ecs_service" "app" {
@@ -329,4 +418,59 @@ resource "aws_iam_role" "ecs_task_role" {
 # Data sources
 data "aws_availability_zones" "available" {
   state = "available"
+}
+
+# CloudFront Distribution for HTTPS without custom domain
+resource "aws_cloudfront_distribution" "main" {
+  count               = var.enable_https && var.domain_name == "" ? 1 : 0
+  enabled             = true
+  is_ipv6_enabled     = true
+  default_root_object = "index.html"
+  price_class         = "PriceClass_100"
+
+  origin {
+    domain_name = aws_lb.main.dns_name
+    origin_id   = "ALB-Origin"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  default_cache_behavior {
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "ALB-Origin"
+
+    forwarded_values {
+      query_string = true
+      headers      = ["*"]
+
+      cookies {
+        forward = "all"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 3600
+    max_ttl                = 86400
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+
+  tags = {
+    Name = "covid-dashboard-cloudfront"
+  }
 }

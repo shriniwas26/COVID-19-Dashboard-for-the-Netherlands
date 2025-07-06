@@ -25,7 +25,17 @@ output "public_url" {
 
 output "https_url" {
   description = "HTTPS URL to access the application"
-  value       = "https://${aws_lb.main.dns_name}"
+  value       = var.enable_https ? (var.domain_name != "" ? "https://${var.domain_name}" : aws_cloudfront_distribution.main[0].domain_name) : "https://${aws_lb.main.dns_name}"
+}
+
+output "cloudfront_url" {
+  description = "CloudFront HTTPS URL (when no custom domain)"
+  value       = var.enable_https && var.domain_name == "" ? "https://${aws_cloudfront_distribution.main[0].domain_name}" : null
+}
+
+output "custom_domain_url" {
+  description = "Custom domain URL (if HTTPS is enabled)"
+  value       = var.enable_https ? "https://${var.domain_name}" : null
 }
 
 output "target_group_arn" {
