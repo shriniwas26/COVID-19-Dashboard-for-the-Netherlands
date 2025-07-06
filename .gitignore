@@ -23,3 +23,5 @@ rivm_download.csv
 terraform.tfplan
 terraform.tfplan.*
 .terraform.tfstate.lock.info
+
+.DS_Store
