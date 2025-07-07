@@ -180,7 +180,9 @@ resource "aws_ecs_task_definition" "app" {
   memory                   = 1024
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
   task_role_arn            = aws_iam_role.ecs_task_role.arn
+  depends_on               = [null_resource.docker_build_and_push]
 
+  # Use latest tag directly
   container_definitions = jsonencode([
     {
       name  = "covid-dashboard"
@@ -418,6 +420,26 @@ resource "aws_iam_role" "ecs_task_role" {
 # Data sources
 data "aws_availability_zones" "available" {
   state = "available"
+}
+
+
+
+# Null resource to build and push Docker image
+resource "null_resource" "docker_build_and_push" {
+  depends_on = [aws_ecr_repository.app]
+
+  triggers = {
+    # Trigger on file changes
+    dockerfile_hash   = filemd5("${path.module}/../Dockerfile")
+    app_hash          = filemd5("${path.module}/../covid_dashboard_nl.py")
+    requirements_hash = filemd5("${path.module}/../requirements.txt")
+    # Add timestamp to force update
+    timestamp = timestamp()
+  }
+
+  provisioner "local-exec" {
+    command = "chmod +x ${path.module}/../build_and_push.sh && ${path.module}/../build_and_push.sh ${var.aws_region} ${aws_ecr_repository.app.name}"
+  }
 }
 
 # CloudFront Distribution for HTTPS without custom domain

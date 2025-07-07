@@ -17,7 +17,12 @@ import update_data
 ##### Define constants #####
 PER_POPULATION = 100
 COVID_DATA_FILE = "data/COVID-19_aantallen_gemeente_cumulatief.csv"
-DEFAULT_MUNICIPALITIES = ["Amsterdam", "Eindhoven", "Heerlen", "Nijmegen"]
+DEFAULT_MUNICIPALITIES = [
+    "Amsterdam",
+    "Eindhoven",
+    "Rotterdam",
+    "Maastricht",
+]
 
 
 ##### Utility functions #####
@@ -35,7 +40,7 @@ def round_significant_digits(x, n=2):
 ## Metrics to display ##
 METRICS = ["Total_reported", "Hospital_admission", "Deceased"]
 
-COVID_DATA = pd.read_csv(COVID_DATA_FILE, sep=";")
+COVID_DATA: pd.DataFrame = pd.read_csv(COVID_DATA_FILE, sep=";")
 COVID_DATA["Date_of_report"] = pd.to_datetime(COVID_DATA["Date_of_report"])
 
 datetime_last_updated = datetime.datetime.fromtimestamp(
@@ -57,11 +62,11 @@ if (datetime_now - datetime_last_updated) >= datetime.timedelta(days=1):
 
 
 # Remove all data points which don't have a municipality name
-COVID_DATA = COVID_DATA[COVID_DATA["Municipality_name"] != ""]
-COVID_DATA = COVID_DATA[(COVID_DATA["Municipality_name"].notna())]
+# COVID_DATA = COVID_DATA[COVID_DATA["Municipality_name"] != ""]  # type: ignore
+COVID_DATA = COVID_DATA[~(COVID_DATA["Municipality_name"].isna())]  # type: ignore
 
 ## Replace faulty data ##
-COVID_DATA["Province"] = COVID_DATA["Province"].replace(
+COVID_DATA["Province"] = COVID_DATA["Province"].replace(  # type: ignore
     {
         "FryslÃ¢n": "Friesland",
         "Fryslân": "Friesland",
@@ -104,10 +109,12 @@ for covid_metric in METRICS:
 
 
 def get_provincial_data():
-    df = pd.read_csv(COVID_DATA_FILE, sep=";")
+    df: pd.DataFrame = pd.read_csv(COVID_DATA_FILE, sep=";")
     df = df[
         df["Municipality_code"].isna() & df["Municipality_name"].isna()
-    ].reset_index(drop=True)
+    ].reset_index(
+        drop=True
+    )  # type: ignore
     df = df.sort_values(by=["Date_of_report", "Province"])
     for metric in METRICS:
         df[f"{metric}_daily"] = COVID_DATA.groupby("Province")[metric].transform(
@@ -201,7 +208,9 @@ app.layout = html.Div(
                         {"label": i.replace("_", " ").title(), "value": i}
                         for i in METRICS
                     ],
-                    value=["Total_reported", "Deceased"],
+                    value=[
+                        "Total_reported",
+                    ],
                     multi=True,
                     style={
                         "textAlign": "left",
@@ -363,6 +372,41 @@ app.layout = html.Div(
             style={"width": "99vw", "display": "inline-block", "padding": "0 20"},
             id="prov_figure",
         ),
+        html.Div(
+            [
+                html.P(
+                    [
+                        "Data source: ",
+                        html.A(
+                            "RIVM",
+                            href="https://data.rivm.nl/covid-19/",
+                            target="_blank",
+                            style={"color": "#007bff", "text-decoration": "none"},
+                        ),
+                        " | ",
+                        html.A(
+                            "GitHub",
+                            href="https://github.com/shriniwas26/COVID-19-Dashboard-for-the-Netherlands",
+                            target="_blank",
+                            style={"color": "#007bff", "text-decoration": "none"},
+                        ),
+                    ],
+                    style={
+                        "textAlign": "center",
+                        "margin": "20px 0",
+                        "font-size": "14px",
+                        "color": "#666",
+                    },
+                ),
+            ],
+            style={
+                "width": "100%",
+                "textAlign": "center",
+                "margin-top": "20px",
+                "border-top": "1px solid #eee",
+                "padding-top": "10px",
+            },
+        ),
     ]
 )
 
@@ -481,12 +525,14 @@ def process_and_render_provinces(
             )
 
         ## Round the data to 3 significant digits ##
-        province_data_selected[column_name] = province_data_selected[column_name].apply(
+        province_data_selected[column_name] = province_data_selected[column_name].apply(  # type: ignore
             lambda x: round_significant_digits(x, 3)
         )
         province_data_selected[covid_metric] = province_data_selected[
             covid_metric
-        ].apply(lambda x: round_significant_digits(x, 3))
+        ].apply(
+            lambda x: round_significant_digits(x, 3)
+        )  # type: ignore
 
         province_fig = go.Figure()
         for grp, df in province_data_selected.groupby("Province"):

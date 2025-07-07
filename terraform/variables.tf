@@ -39,3 +39,9 @@ variable "netlify_verification_txt" {
   type        = string
   default     = ""
 }
+
+variable "docker_image_tag" {
+  description = "Docker image tag to deploy"
+  type        = string
+  default     = "latest"
+}
