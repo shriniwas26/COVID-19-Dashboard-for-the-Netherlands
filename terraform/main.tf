@@ -245,12 +245,6 @@ resource "aws_lb_target_group" "app" {
     unhealthy_threshold = 2
   }
 }
-
-# Route 53 Hosted Zone (if you register domain through Route 53)
-# resource "aws_route53_zone" "main" {
-#   name = "covid-dashboard.com"
-# }
-
 # Route 53 A Record pointing to ALB (only if HTTPS is enabled)
 resource "aws_route53_record" "app" {
   count   = var.enable_https ? 1 : 0
@@ -434,12 +428,10 @@ resource "null_resource" "docker_build_and_push" {
     app_hash        = filemd5("${path.module}/../covid_dashboard_nl.py")
     uv_lock_hash    = filemd5("${path.module}/../uv.lock")
     pyproject_hash  = filemd5("${path.module}/../pyproject.toml")
-    # Add timestamp to force update
-    timestamp = timestamp()
   }
 
   provisioner "local-exec" {
-    command = "chmod +x ${path.module}/../build_and_push.sh && ${path.module}/../build_and_push.sh ${var.aws_region} ${aws_ecr_repository.app.name}"
+    command = "bash ${path.module}/../build_and_push.sh ${var.aws_region} ${aws_ecr_repository.app.name}"
   }
 }
 

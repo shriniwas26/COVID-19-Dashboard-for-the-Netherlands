@@ -12,10 +12,7 @@ echo "Region: $REGION"
 echo "Repository: $REPO_NAME"
 
 # Build Docker image with correct architecture
-docker build --platform linux/amd64 -t $REPO_NAME:latest .. --no-cache
-
-# Tag for ECR
-docker tag $REPO_NAME:latest $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO_NAME:latest
+docker build --no-cache --platform linux/amd64 -t $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO_NAME:latest ..
 
 # Login to ECR
 aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
