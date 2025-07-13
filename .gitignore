@@ -25,3 +25,6 @@ terraform.tfplan.*
 .terraform.tfstate.lock.info
 
 .DS_Store
+
+# uv
+.uv/

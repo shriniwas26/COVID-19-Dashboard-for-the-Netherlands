@@ -13,4 +13,4 @@ services:
     volumes:
       - ./:/app/
     restart: unless-stopped
-    command: python3 covid_dashboard_nl.py
+    # command: uv run python3 covid_dashboard_nl.py
