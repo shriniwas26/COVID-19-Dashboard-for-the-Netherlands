@@ -1,0 +1,57 @@
+.vscode
+# Ignore Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.log
+*.env
+*.venv
+.env.*
+.venv/
+build/
+dist/
+*.egg-info/
+
+# Ignore Git and editor files
+.git
+.gitignore
+.DS_Store
+*.swp
+*.bak
+
+# Ignore Node and test files
+node_modules/
+test/
+tests/
+coverage/
+
+# Ignore documentation and lock files
+*.tar
+*.tar.gz
+*.zip
+*.tgz
+*.md
+README*
+
+# Ignore Docker and deployment scripts
+docker-compose.yml
+build_and_push.sh
+
+# Ignore all Terraform files and directories
+terraform/
+*.tf
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+terraform.tfvars
+terraform.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+# End of Terraform exclusions
