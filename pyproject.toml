@@ -9,6 +9,7 @@ dependencies = [
     "dash-html-components",
     "dash-table",
     "flask",
+    "numpy",
     "pandas",
     "plotly",
     "pytz",
