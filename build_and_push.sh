@@ -12,7 +12,7 @@ echo "Region: $REGION"
 echo "Repository: $REPO_NAME"
 
 # Build Docker image with correct architecture
-docker build --platform linux/amd64 -t $REPO_NAME:latest ..
+docker build --platform linux/amd64 -t $REPO_NAME:latest .. --no-cache
 
 # Tag for ECR
 docker tag $REPO_NAME:latest $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO_NAME:latest

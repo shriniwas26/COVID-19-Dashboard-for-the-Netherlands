@@ -430,9 +430,10 @@ resource "null_resource" "docker_build_and_push" {
 
   triggers = {
     # Trigger on file changes
-    dockerfile_hash   = filemd5("${path.module}/../Dockerfile")
-    app_hash          = filemd5("${path.module}/../covid_dashboard_nl.py")
-    requirements_hash = filemd5("${path.module}/../requirements.txt")
+    dockerfile_hash = filemd5("${path.module}/../Dockerfile")
+    app_hash        = filemd5("${path.module}/../covid_dashboard_nl.py")
+    uv_lock_hash    = filemd5("${path.module}/../uv.lock")
+    pyproject_hash  = filemd5("${path.module}/../pyproject.toml")
     # Add timestamp to force update
     timestamp = timestamp()
   }
