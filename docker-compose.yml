@@ -1,6 +1,7 @@
 services:
   dashboard:
-    platform: linux/amd64
+    # platform: linux/amd64
+    restart: never
     build:
       context: .
       dockerfile: Dockerfile
@@ -10,7 +11,10 @@ services:
     environment:
       - DASH_DEBUG=1
       - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
     volumes:
-      - ./:/app/
-    restart: unless-stopped
-    # command: uv run python3 covid_dashboard_nl.py
+      - ./covid_dashboard_nl.py:/app/covid_dashboard_nl.py
+      - ./update_data.py:/app/update_data.py
+      - ./data:/app/data
+      - ./assets:/app/assets
+    command: uv run python covid_dashboard_nl.py

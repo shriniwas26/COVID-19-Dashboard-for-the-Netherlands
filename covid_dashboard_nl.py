@@ -38,7 +38,11 @@ def round_significant_digits(x, n=2):
 
 
 ## Metrics to display ##
-METRICS = ["Total_reported", "Hospital_admission", "Deceased"]
+METRICS = [
+    "Total_reported",
+    "Hospital_admission",
+    "Deceased",
+]
 
 COVID_DATA: pd.DataFrame = pd.read_csv(COVID_DATA_FILE, sep=";")
 COVID_DATA["Date_of_report"] = pd.to_datetime(COVID_DATA["Date_of_report"])

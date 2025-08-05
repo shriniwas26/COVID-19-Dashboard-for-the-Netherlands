@@ -41,6 +41,38 @@ resource "aws_internet_gateway" "main" {
   }
 }
 
+
+resource "aws_vpc_endpoint" "ecr_api" {
+  vpc_id             = aws_vpc.main.id
+  service_name       = "com.amazonaws.${var.aws_region}.ecr.api"
+  vpc_endpoint_type  = "Interface"
+  subnet_ids         = aws_subnet.private[*].id
+  security_group_ids = [aws_security_group.ecs.id]
+
+  private_dns_enabled = true
+}
+
+resource "aws_vpc_endpoint" "ecr_dkr" {
+  vpc_id             = aws_vpc.main.id
+  service_name       = "com.amazonaws.${var.aws_region}.ecr.dkr"
+  vpc_endpoint_type  = "Interface"
+  subnet_ids         = aws_subnet.private[*].id
+  security_group_ids = [aws_security_group.ecs.id]
+
+  private_dns_enabled = true
+}
+
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${var.aws_region}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = aws_route_table.private[*].id
+
+  tags = {
+    Name = "s3-gateway-endpoint"
+  }
+}
+
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
@@ -60,29 +92,14 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-resource "aws_eip" "nat" {
-  count  = 2
-  domain = "vpc"
-}
-
-resource "aws_nat_gateway" "main" {
-  count         = 2
-  allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
-
-  tags = {
-    Name = "covid-dashboard-nat-${count.index + 1}"
-  }
-}
+# NAT Gateways removed to reduce costs - VPC endpoints handle ECR access
 
 resource "aws_route_table" "private" {
   count  = 2
   vpc_id = aws_vpc.main.id
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
-  }
+  # No default route needed since VPC endpoints handle AWS service access
+  # This eliminates NAT gateway costs
 
   tags = {
     Name = "covid-dashboard-private-rt-${count.index + 1}"
@@ -139,6 +156,14 @@ resource "aws_security_group" "ecs" {
     security_groups = [aws_security_group.alb.id]
   }
 
+  # Allow HTTPS traffic to VPC endpoints
+  ingress {
+    protocol    = "tcp"
+    from_port   = 443
+    to_port     = 443
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
   egress {
     protocol    = "-1"
     from_port   = 0
@@ -176,8 +201,8 @@ resource "aws_ecs_task_definition" "app" {
   family                   = "covid-dashboard"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = 512
-  memory                   = 1024
+  cpu                      = 256
+  memory                   = 512
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
   task_role_arn            = aws_iam_role.ecs_task_role.arn
   depends_on               = [null_resource.docker_build_and_push]
@@ -368,7 +393,7 @@ resource "aws_ecs_service" "app" {
 # CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/covid-dashboard"
-  retention_in_days = 7
+  retention_in_days = 1 # Reduced to minimize storage costs
 }
 
 # IAM Roles
