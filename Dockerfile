@@ -19,7 +19,9 @@ USER appuser
 
 COPY --chown=appuser:appuser ./uv.lock ./pyproject.toml ./
 
-RUN uv sync
+RUN uv sync --frozen
+
+COPY --chown=appuser:appuser ./data ./data
 
 COPY --chown=appuser:appuser . .
 

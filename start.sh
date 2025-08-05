@@ -1,5 +1,3 @@
-set +e
-uv run python update_data.py
+set -euo pipefail
 
-set -e
-uv run gunicorn --bind 0.0.0.0:8080 --workers 2 --timeout 10 covid_dashboard_nl:server
+uv run gunicorn --bind 0.0.0.0:8080 --workers 1 --timeout 10 --max-requests 100 --max-requests-jitter 10 --worker-class sync covid_dashboard_nl:server
