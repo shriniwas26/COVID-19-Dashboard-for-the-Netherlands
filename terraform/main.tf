@@ -10,26 +10,14 @@ resource "aws_vpc" "main" {
 }
 
 resource "aws_subnet" "public" {
-  count             = 2
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.${count.index + 1}.0/24"
-  availability_zone = data.aws_availability_zones.available.names[count.index]
-
+  count                   = 2
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index)
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
 
   tags = {
     Name = "covid-dashboard-public-${count.index + 1}"
-  }
-}
-
-resource "aws_subnet" "private" {
-  count             = 2
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.${count.index + 10}.0/24"
-  availability_zone = data.aws_availability_zones.available.names[count.index]
-
-  tags = {
-    Name = "covid-dashboard-private-${count.index + 1}"
   }
 }
 
@@ -38,38 +26,6 @@ resource "aws_internet_gateway" "main" {
 
   tags = {
     Name = "covid-dashboard-igw"
-  }
-}
-
-
-resource "aws_vpc_endpoint" "ecr_api" {
-  vpc_id             = aws_vpc.main.id
-  service_name       = "com.amazonaws.${var.aws_region}.ecr.api"
-  vpc_endpoint_type  = "Interface"
-  subnet_ids         = aws_subnet.private[*].id
-  security_group_ids = [aws_security_group.ecs.id]
-
-  private_dns_enabled = true
-}
-
-resource "aws_vpc_endpoint" "ecr_dkr" {
-  vpc_id             = aws_vpc.main.id
-  service_name       = "com.amazonaws.${var.aws_region}.ecr.dkr"
-  vpc_endpoint_type  = "Interface"
-  subnet_ids         = aws_subnet.private[*].id
-  security_group_ids = [aws_security_group.ecs.id]
-
-  private_dns_enabled = true
-}
-
-resource "aws_vpc_endpoint" "s3" {
-  vpc_id            = aws_vpc.main.id
-  service_name      = "com.amazonaws.${var.aws_region}.s3"
-  vpc_endpoint_type = "Gateway"
-  route_table_ids   = aws_route_table.private[*].id
-
-  tags = {
-    Name = "s3-gateway-endpoint"
   }
 }
 
@@ -90,26 +46,6 @@ resource "aws_route_table_association" "public" {
   count          = 2
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
-}
-
-# NAT Gateways removed to reduce costs - VPC endpoints handle ECR access
-
-resource "aws_route_table" "private" {
-  count  = 2
-  vpc_id = aws_vpc.main.id
-
-  # No default route needed since VPC endpoints handle AWS service access
-  # This eliminates NAT gateway costs
-
-  tags = {
-    Name = "covid-dashboard-private-rt-${count.index + 1}"
-  }
-}
-
-resource "aws_route_table_association" "private" {
-  count          = 2
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[count.index].id
 }
 
 # Security Groups
@@ -144,9 +80,9 @@ resource "aws_security_group" "alb" {
   }
 }
 
-resource "aws_security_group" "ecs" {
-  name        = "covid-dashboard-ecs-sg"
-  description = "Security group for ECS tasks"
+resource "aws_security_group" "ecs_instance" {
+  name        = "covid-dashboard-ecs-instance-sg"
+  description = "Security group for ECS instances"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -156,12 +92,12 @@ resource "aws_security_group" "ecs" {
     security_groups = [aws_security_group.alb.id]
   }
 
-  # Allow HTTPS traffic to VPC endpoints
+  # Allow SSH access (optional, for debugging)
   ingress {
     protocol    = "tcp"
-    from_port   = 443
-    to_port     = 443
-    cidr_blocks = ["10.0.0.0/16"]
+    from_port   = 22
+    to_port     = 22
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -172,7 +108,7 @@ resource "aws_security_group" "ecs" {
   }
 
   tags = {
-    Name = "covid-dashboard-ecs-sg"
+    Name = "covid-dashboard-ecs-instance-sg"
   }
 }
 
@@ -180,10 +116,62 @@ resource "aws_security_group" "ecs" {
 resource "aws_ecr_repository" "app" {
   name                 = "covid-dashboard"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
   }
+}
+
+# IAM Role for ECS Instances
+resource "aws_iam_role" "ecs_instance_role" {
+  name = "covid-dashboard-ecs-instance-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_instance_policy" {
+  role       = aws_iam_role.ecs_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+}
+
+resource "aws_iam_instance_profile" "ecs_instance_profile" {
+  name = "covid-dashboard-ecs-instance-profile"
+  role = aws_iam_role.ecs_instance_role.name
+}
+
+# IAM Role for ECS Task Execution
+resource "aws_iam_role" "ecs_execution_role" {
+  name = "covid-dashboard-ecs-execution-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_execution_role_policy" {
+  role       = aws_iam_role.ecs_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
 # ECS Cluster
@@ -199,22 +187,24 @@ resource "aws_ecs_cluster" "main" {
 # ECS Task Definition
 resource "aws_ecs_task_definition" "app" {
   family                   = "covid-dashboard"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = 256
-  memory                   = 512
+  requires_compatibilities = ["EC2"]
+  network_mode             = "bridge"
+  cpu                      = "512"
+  memory                   = "1024"
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
-  task_role_arn            = aws_iam_role.ecs_task_role.arn
-  depends_on               = [null_resource.docker_build_and_push]
+  # depends_on               = [null_resource.docker_build_and_push]
 
-  # Use latest tag directly
   container_definitions = jsonencode([
     {
-      name  = "covid-dashboard"
-      image = "${aws_ecr_repository.app.repository_url}:latest"
+      name      = "covid-dashboard"
+      image     = "${aws_ecr_repository.app.repository_url}:latest"
+      memory    = 768
+      cpu       = 512
+      essential = true
       portMappings = [
         {
           containerPort = 8080
+          hostPort      = 8080
           protocol      = "tcp"
         }
       ]
@@ -228,7 +218,7 @@ resource "aws_ecs_task_definition" "app" {
         logDriver = "awslogs"
         options = {
           awslogs-group         = aws_cloudwatch_log_group.app.name
-          awslogs-region        = "eu-north-1"
+          awslogs-region        = var.aws_region
           awslogs-stream-prefix = "ecs"
         }
       }
@@ -256,7 +246,7 @@ resource "aws_lb_target_group" "app" {
   port        = 8080
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
-  target_type = "ip"
+  target_type = "instance"
 
   health_check {
     enabled             = true
@@ -269,7 +259,12 @@ resource "aws_lb_target_group" "app" {
     timeout             = 5
     unhealthy_threshold = 2
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
+
 # Route 53 A Record pointing to ALB (only if HTTPS is enabled)
 resource "aws_route53_record" "app" {
   count   = var.enable_https ? 1 : 0
@@ -322,21 +317,10 @@ resource "aws_acm_certificate" "main" {
   }
 }
 
-# Alternative certificate for ALB default domain (when no custom domain)
-resource "aws_acm_certificate" "alb_default" {
-  count             = var.enable_https && var.domain_name == "" ? 1 : 0
-  domain_name       = "*.elb.amazonaws.com"
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
 # Certificate validation (only if HTTPS is enabled)
 resource "aws_acm_certificate_validation" "main" {
   count           = var.enable_https ? 1 : 0
-  certificate_arn = var.domain_name != "" ? aws_acm_certificate.main[0].arn : aws_acm_certificate.alb_default[0].arn
+  certificate_arn = aws_acm_certificate.main[0].arn
 }
 
 resource "aws_lb_listener" "http" {
@@ -348,6 +332,8 @@ resource "aws_lb_listener" "http" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
   }
+
+  depends_on = [aws_lb_target_group.app]
 }
 
 # HTTPS listener - only created if HTTPS is enabled and certificate is available
@@ -364,7 +350,30 @@ resource "aws_lb_listener" "https" {
     target_group_arn = aws_lb_target_group.app.arn
   }
 
-  depends_on = [aws_acm_certificate_validation.main]
+  depends_on = [aws_acm_certificate_validation.main, aws_lb_target_group.app]
+}
+
+# Single EC2 Instance for ECS
+resource "aws_instance" "ecs" {
+  ami                    = data.aws_ami.ecs.id
+  instance_type          = "t2.small" # 2GB RAM for better performance
+  iam_instance_profile   = aws_iam_instance_profile.ecs_instance_profile.name
+  vpc_security_group_ids = [aws_security_group.ecs_instance.id]
+  subnet_id              = aws_subnet.public[0].id
+
+  user_data = base64encode("#!/bin/bash\necho ECS_CLUSTER=${aws_ecs_cluster.main.name} >> /etc/ecs/ecs.config")
+
+  monitoring = true
+
+  # Enable detailed CloudWatch monitoring
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"
+  }
+
+  tags = {
+    Name = "covid-dashboard-ecs-instance"
+  }
 }
 
 # ECS Service
@@ -373,21 +382,15 @@ resource "aws_ecs_service" "app" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.app.arn
   desired_count   = 1
-  launch_type     = "FARGATE"
+  launch_type     = "EC2"
+  depends_on      = [aws_instance.ecs, aws_lb_listener.http]
+}
 
-  network_configuration {
-    security_groups  = [aws_security_group.ecs.id]
-    subnets          = aws_subnet.private[*].id
-    assign_public_ip = false
-  }
-
-  load_balancer {
-    target_group_arn = aws_lb_target_group.app.arn
-    container_name   = "covid-dashboard"
-    container_port   = 8080
-  }
-
-  depends_on = [aws_lb_listener.http]
+# Add EC2 instance to target group
+resource "aws_lb_target_group_attachment" "ecs" {
+  target_group_arn = aws_lb_target_group.app.arn
+  target_id        = aws_instance.ecs.id
+  port             = 8080
 }
 
 # CloudWatch Log Group
@@ -396,44 +399,87 @@ resource "aws_cloudwatch_log_group" "app" {
   retention_in_days = 1 # Reduced to minimize storage costs
 }
 
-# IAM Roles
-resource "aws_iam_role" "ecs_execution_role" {
-  name = "covid-dashboard-ecs-execution-role"
+# CloudWatch Dashboard for Memory Monitoring
+resource "aws_cloudwatch_dashboard" "main" {
+  dashboard_name = "covid-dashboard-monitoring"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
+  dashboard_body = jsonencode({
+    widgets = [
       {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
+        type   = "metric"
+        x      = 0
+        y      = 0
+        width  = 12
+        height = 6
+
+        properties = {
+          metrics = [
+            ["AWS/EC2", "MemoryUtilization", "InstanceId", aws_instance.ecs.id],
+            [".", "CPUUtilization", ".", "."],
+            [".", "NetworkIn", ".", "."],
+            [".", "NetworkOut", ".", "."]
+          ]
+          period = 300
+          stat   = "Average"
+          region = var.aws_region
+          title  = "EC2 Instance Metrics"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 0
+        width  = 12
+        height = 6
+
+        properties = {
+          metrics = [
+            ["AWS/ECS", "CPUUtilization", "ServiceName", aws_ecs_service.app.name, "ClusterName", aws_ecs_cluster.main.name],
+            [".", "MemoryUtilization", ".", ".", ".", "."]
+          ]
+          period = 300
+          stat   = "Average"
+          region = var.aws_region
+          title  = "ECS Service Metrics"
         }
       }
     ]
   })
 }
 
-resource "aws_iam_role_policy_attachment" "ecs_execution_role_policy" {
-  role       = aws_iam_role.ecs_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+# CloudWatch Alarms for Memory Monitoring
+resource "aws_cloudwatch_metric_alarm" "memory_high" {
+  alarm_name          = "covid-dashboard-memory-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "MemoryUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors EC2 memory utilization"
+  alarm_actions       = []
+
+  dimensions = {
+    InstanceId = aws_instance.ecs.id
+  }
 }
 
-resource "aws_iam_role" "ecs_task_role" {
-  name = "covid-dashboard-ecs-task-role"
+resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+  alarm_name          = "covid-dashboard-cpu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors EC2 CPU utilization"
+  alarm_actions       = []
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-      }
-    ]
-  })
+  dimensions = {
+    InstanceId = aws_instance.ecs.id
+  }
 }
 
 # Data sources
@@ -441,7 +487,15 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+data "aws_ami" "ecs" {
+  most_recent = true
+  owners      = ["amazon"]
 
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-ecs-hvm-*-x86_64-ebs"]
+  }
+}
 
 # Null resource to build and push Docker image
 resource "null_resource" "docker_build_and_push" {
@@ -457,60 +511,5 @@ resource "null_resource" "docker_build_and_push" {
 
   provisioner "local-exec" {
     command = "bash ${path.module}/../build_and_push.sh ${var.aws_region} ${aws_ecr_repository.app.name}"
-  }
-}
-
-# CloudFront Distribution for HTTPS without custom domain
-resource "aws_cloudfront_distribution" "main" {
-  count               = var.enable_https && var.domain_name == "" ? 1 : 0
-  enabled             = true
-  is_ipv6_enabled     = true
-  default_root_object = "index.html"
-  price_class         = "PriceClass_100"
-
-  origin {
-    domain_name = aws_lb.main.dns_name
-    origin_id   = "ALB-Origin"
-
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "http-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
-  }
-
-  default_cache_behavior {
-    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "ALB-Origin"
-
-    forwarded_values {
-      query_string = true
-      headers      = ["*"]
-
-      cookies {
-        forward = "all"
-      }
-    }
-
-    viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 0
-    default_ttl            = 3600
-    max_ttl                = 86400
-  }
-
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
-    }
-  }
-
-  viewer_certificate {
-    cloudfront_default_certificate = true
-  }
-
-  tags = {
-    Name = "covid-dashboard-cloudfront"
   }
 }

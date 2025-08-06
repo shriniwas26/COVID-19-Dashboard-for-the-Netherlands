@@ -1,5 +1,5 @@
 # AWS Configuration
-aws_region = "eu-north-1"
+aws_region = "eu-west-1"
 project_name = "covid-dashboard"
 environment = "production"
 
