@@ -5,11 +5,12 @@ description = "COVID-19 Dashboard for the Netherlands"
 requires-python = ">=3.13"
 dependencies = [
     "dash~=3.1.0",
+    "plotly",
     "dash-core-components~=2.0.0",
     "dash-html-components~=2.0.0",
     "dash-table~=5.0.0",
-    "pandas~=2.3.1",
-    "plotly~=5.19.0",
+    "pandas>2.0.0",
+    "numpy>2.0.0",
     "pytz~=2025.1",
     "requests~=2.32.3",
     "gunicorn~=23.0.0",

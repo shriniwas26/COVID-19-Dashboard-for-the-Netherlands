@@ -274,7 +274,7 @@ app.layout = html.Div(
                 dcc.RadioItems(
                     id="series_type",
                     options=[{"label": i, "value": i} for i in ["Cumulative", "Daily"]],
-                    value="Daily",
+                    value="Cumulative",
                     style={
                         "textAlign": "left",
                         "align": "center",

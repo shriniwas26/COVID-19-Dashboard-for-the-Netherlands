@@ -3,7 +3,7 @@ set -e
 
 # Get AWS account ID and region
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-REGION=${1:-eu-north-1}
+REGION=${1:-eu-west-1}
 REPO_NAME=${2:-covid-dashboard}
 
 echo "Building and pushing Docker image..."
@@ -12,7 +12,7 @@ echo "Region: $REGION"
 echo "Repository: $REPO_NAME"
 
 # Build Docker image with correct architecture
-docker build --no-cache --platform linux/amd64 -t $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO_NAME:latest ..
+docker build --platform linux/amd64 -t $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO_NAME:latest ..
 
 # Login to ECR
 aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
